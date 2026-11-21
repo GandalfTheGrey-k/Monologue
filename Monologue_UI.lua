@@ -14,7 +14,7 @@ MonologueUI = {}
 local UI = MonologueUI
 
 local PANEL_WIDTH = 480
-local PANEL_HEIGHT = 646
+local PANEL_HEIGHT = 676
 local LEFT = 22
 local CONTROL_X = 210
 local DROPDOWN_WIDTH = 220
@@ -226,7 +226,7 @@ function UI:CreatePanel()
         function() return MonologueDB.enabled end,
         function(value) MonologueDB.enabled = value end)
 
-    controls.stepdown = CreateCheckbox(f, "Lighter accent in party chat, none in raid chat", -94,
+    controls.stepdown = CreateCheckbox(f, "Lighter accent in group chat (party, raid, instance)", -94,
         function() return MonologueDB.channelStepdown end,
         function(value) MonologueDB.channelStepdown = value end)
 
@@ -347,6 +347,40 @@ function UI:CreatePanel()
     end)
     controls.strict:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- Translate In (MonologueDB.translateChannels): which chat channels get the accent
+    local channelLabel = CreateLabel(f, "Translate in:", "GameFontNormal")
+    channelLabel:SetPoint("TOPLEFT", LEFT, -540)
+    local channelHint = CreateLabel(f, "|cff888888your typed chat and Monologue's own lines|r", "GameFontHighlightSmall")
+    channelHint:SetPoint("LEFT", channelLabel, "RIGHT", 8, 0)
+    controls.channels = {}
+    local CHANNEL_BOXES = {
+        { "SAY", "Say" }, { "YELL", "Yell" }, { "PARTY", "Party" }, { "RAID", "Raid" },
+        { "INSTANCE", "Instance" }, { "GUILD", "Guild" }, { "OFFICER", "Officer" }, { "WHISPER", "Whisper" },
+    }
+    for i, entry in ipairs(CHANNEL_BOXES) do
+        local key, text = entry[1], entry[2]
+        local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+        local cb = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+        cb:SetSize(24, 24)
+        cb:SetPoint("TOPLEFT", LEFT - 4 + col * 108, -556 - row * 24)
+        local label = cb.Text or cb.text
+        if not label then
+            label = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        end
+        label:SetFontObject("GameFontHighlight")
+        label:SetText(text)
+        cb:SetScript("OnClick", function(self)
+            MonologueDB.translateChannels = MonologueDB.translateChannels or {}
+            MonologueDB.translateChannels[key] = self:GetChecked() and true or false
+        end)
+        cb.Refresh = function(self)
+            local channels = MonologueDB.translateChannels
+            self:SetChecked(type(channels) == "table" and channels[key] == true)
+        end
+        controls.channels[#controls.channels + 1] = cb
+    end
+
     -----------------------------------------------------------------------
     -- Footer: active profile status + close
     -----------------------------------------------------------------------
@@ -388,6 +422,7 @@ function UI:Refresh()
     controls.openWorld:Refresh()
     controls.debug:Refresh()
     controls.strict:Refresh()
+    for _, cb in ipairs(controls.channels) do cb:Refresh() end
 
     local context = MonologueEngine.ActiveContext or {}
     local personaCount = #MonologueEngine:GetPersonaKeys()

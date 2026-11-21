@@ -621,6 +621,19 @@ function Engine:InitializeDB()
     if type(MonologueDB.pressVoiceBlocked) ~= "table" then MonologueDB.pressVoiceBlocked = {} end
     MonologueDB.enabled = MonologueDB.enabled ~= false
     MonologueDB.channelStepdown = MonologueDB.channelStepdown ~= false
+    -- Which chat channels the translator works in (General tab, "Translate In"). New installs
+    -- get Say, Yell and Party; an existing install that had the group step-down switched off
+    -- (so raid chat was translated) keeps Raid and Instance on.
+    if type(MonologueDB.translateChannels) ~= "table" then
+        local groupOn = MonologueDB.channelStepdown == false
+        MonologueDB.translateChannels = {
+            SAY = true, YELL = true, PARTY = true, RAID = groupOn, INSTANCE = groupOn,
+            GUILD = false, OFFICER = false, WHISPER = false,
+        }
+    end
+    for _, key in ipairs({ "SAY", "YELL", "PARTY", "RAID", "INSTANCE", "GUILD", "OFFICER", "WHISPER" }) do
+        MonologueDB.translateChannels[key] = MonologueDB.translateChannels[key] == true
+    end
     -- The Battle Cry button became opt-in: hide it once for existing installs, after which
     -- the player's own choice (checkbox or /mono button) is kept
     if not MonologueDB.cryButtonOptIn then

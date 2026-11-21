@@ -76,17 +76,35 @@ local MARKER_PATTERN = "\001(%d+)\002"
 
 -- Chat channels the hook may translate. Everything else (whispers, guild,
 -- officer, custom channels, Battle.net, emotes) is always passed through.
-local CHANNEL_RULES = {
-    SAY = "full",
-    YELL = "full",
-    PARTY = "party",
-    PARTY_LEADER = "party",
-    RAID = "group",
-    RAID_LEADER = "group",
-    RAID_WARNING = "group",
-    INSTANCE_CHAT = "group",
-    INSTANCE_CHAT_LEADER = "group",
+-- chatType -> MonologueDB.translateChannels key (General tab, "Translate In"). Anything not
+-- listed (numbered channels, Battle.net, emotes, ...) is never translated.
+local CHANNEL_KEYS = {
+    SAY = "SAY",
+    YELL = "YELL",
+    PARTY = "PARTY",
+    PARTY_LEADER = "PARTY",
+    RAID = "RAID",
+    RAID_LEADER = "RAID",
+    RAID_WARNING = "RAID",
+    INSTANCE_CHAT = "INSTANCE",
+    INSTANCE_CHAT_LEADER = "INSTANCE",
+    GUILD = "GUILD",
+    OFFICER = "OFFICER",
+    WHISPER = "WHISPER",
 }
+-- Group channels where "Lighter accent in group chat" steps the accent down to Light
+local GROUP_KEYS = { PARTY = true, RAID = true, INSTANCE = true }
+
+-- Default when the saved table is missing (before the DB loads)
+local DEFAULT_TRANSLATE_CHANNELS = { SAY = true, YELL = true, PARTY = true }
+
+function Translator:IsChannelTranslated(chatType)
+    local key = chatType and CHANNEL_KEYS[chatType]
+    if not key then return false end
+    local channels = MonologueDB and MonologueDB.translateChannels
+    if type(channels) ~= "table" then return DEFAULT_TRANSLATE_CHANNELS[key] == true end
+    return channels[key] == true
+end
 
 -- Blocks masked before any dialect rule runs and restored intact afterwards.
 -- Order matters: hyperlinks and escapes first so OOC/emote blocks can contain them.
@@ -671,15 +689,11 @@ function Translator:GetChannelIntensity(chatType)
     if base > 0 and shift ~= 0 and strength == "FULL" then
         base = math.max(1, math.min(3, base + math.floor(shift + (shift > 0 and 0.5 or -0.5))))
     end
-    local rule = chatType and CHANNEL_RULES[chatType]
-    if not rule or base <= 0 then return 0 end
+    if base <= 0 or not self:IsChannelTranslated(chatType) then return 0 end
 
-    if MonologueDB.channelStepdown then
-        if rule == "group" then
-            return 0 -- Completely bypass translation in competitive raid/instance channels
-        elseif rule == "party" then
-            return math.min(base, 1) -- Step down to Light (1)
-        end
+    -- Group chat stays readable: step down to Light (1)
+    if MonologueDB.channelStepdown and GROUP_KEYS[CHANNEL_KEYS[chatType]] then
+        return math.min(base, 1)
     end
 
     return base

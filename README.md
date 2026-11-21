@@ -66,13 +66,14 @@ If a group or guild member runs a newer version, Monologue tells you once in cha
 | Control | What it does |
 |---|---|
 | **Monologue is on** | Master switch for the whole addon. |
-| **Lighter accent in party chat, none in raid chat** | Steps the accent down in group chat so raid calls stay readable. |
+| **Lighter accent in group chat (party, raid, instance)** | Steps the accent down to Light in group chat so calls stay readable. |
 | **Accent strength** | How thick the accent is everywhere: **Off**, **Light** (vocabulary), **Standard** (+ accent, some openers/closers), **Unhinged** (+ frequent openers/closers). Applies to lines you *type* too. |
 | **Greetings & reactions** | What happens to lines that don't come from a key press: said in `/s` on your **next ability press** (greetings wait 10 seconds, other lines up to a minute), or shown **only in your chat**. |
 | **Personality by Level** | Optional: pick a persona (Eager Rookie, Cynical Mercenary, Grizzled Veteran, Zealous Crusader) for each level range, so your character grows up as you level. |
 | **Try Your Accent** | Type any line and press **Translate** to hear it in your character's accent. Nothing is sent. |
 | **Debug Mode** | Prints `[Monologue Debug]` lines showing why each line was or wasn't said. Off by default. |
 | **Strict Safe-Mode (Manual & Local Only)** | For players who want **zero automated public chat**. Every automatic line (pulls, greetings, reactions, party banter) shows *only in your own chat window*. Typed chat is still translated, and the Battle Cry and Greet buttons still speak. Same as `/mono safemode`. |
+| **Translate in** | Pick which chat channels get your accent: **Say, Yell, Party, Raid, Instance, Guild, Officer, Whisper**. Covers both what you type and Monologue's own lines. Default: Say, Yell and Party. Numbered channels (trade, general, LFG) are never translated. |
 | **Rivals & Friends** | Opens the roster window (see below). |
 
 ### Voice Lines tab
