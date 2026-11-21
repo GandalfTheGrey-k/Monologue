@@ -2,7 +2,7 @@
 ## Title: Monologue |cff00ccff(v.1)|r
 ## Notes: Public RP & RP-PvP Engine with real-time dialect translation and reactive banter.
 ## Author: Monologue Framework
-## Version: 0.1.0
+## Version: 0.1.1
 ## Category: Roleplay
 ## SavedVariables: MonologueDB
 ## SavedVariablesPerCharacter: MonologueCharDB

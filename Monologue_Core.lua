@@ -276,7 +276,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.0"
+Engine.VERSION = "0.1.1"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}

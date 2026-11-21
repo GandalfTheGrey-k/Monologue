@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.0 (alpha)
+MONOLOGUE  -  version 0.1.1 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
