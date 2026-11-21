@@ -1,0 +1,40 @@
+name: Release
+
+# Push a version tag (e.g. `git tag v0.1.0-alpha && git push origin v0.1.0-alpha`) to build
+# Monologue_v.1.zip and attach it to a GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+
+      - name: Package Monologue_v.1.zip
+        run: |
+          set -euo pipefail
+          mkdir -p build/Monologue_v.1
+          rsync -a ./ build/Monologue_v.1/ \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude ".gitignore" \
+            --exclude "build" \
+            --exclude "*.zip"
+          cd build
+          zip -r -q ../Monologue_v.1.zip Monologue_v.1
+          cd ..
+          unzip -l Monologue_v.1.zip | head -n 20
+
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Monologue_v.1.zip
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}

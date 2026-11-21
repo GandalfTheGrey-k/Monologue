@@ -1,0 +1,6 @@
+# OS clutter
+.DS_Store
+Thumbs.db
+
+# Local release builds
+*.zip

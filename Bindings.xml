@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="MONOLOGUE_GREET" header="MONOLOGUE" category="ADDONS">
+        if MonologueEngine and MonologueEngine.GreetNow then MonologueEngine:GreetNow() end
+    </Binding>
+    <Binding name="MONOLOGUE_BATTLECRY" category="ADDONS">
+        if MonologueEngine and MonologueEngine.BattleCry then MonologueEngine:BattleCry() end
+    </Binding>
+</Bindings>

@@ -1,0 +1,70 @@
+## Interface: 16001
+## Title: Monologue |cff00ccff(v.1)|r
+## Notes: Public RP & RP-PvP Engine with real-time dialect translation and reactive banter.
+## Author: Monologue Framework
+## Version: 0.1.0
+## Category: Roleplay
+## SavedVariables: MonologueDB
+## SavedVariablesPerCharacter: MonologueCharDB
+
+# Core Engine Modules
+Monologue_Core.lua
+Monologue_Translator.lua
+Monologue_RPBridge.lua
+Monologue_UI.lua
+
+# Data Modules: Standard Races & Classes
+races\_Template_Race.lua
+races\Human.lua
+races\Dwarf.lua
+races\NightElf.lua
+races\Gnome.lua
+races\Orc.lua
+races\Scourge.lua
+races\Tauren.lua
+races\Troll.lua
+races\Skyborne.lua
+
+# Data Modules: Zone Lines (world PvP, per zone)
+zones\Zones.lua
+situations\Situations.lua
+situations\Details.lua
+identity\Identity.lua
+identity\Builder.lua
+identity\Layers.lua
+identity\Rivalry.lua
+classes\_Template_Class.lua
+classes\Warrior.lua
+classes\Paladin.lua
+classes\Hunter.lua
+classes\Rogue.lua
+classes\Priest.lua
+classes\Shaman.lua
+classes\Mage.lua
+classes\Warlock.lua
+classes\Druid.lua
+
+# Data Modules: Extended Templates
+personas\_Template_Persona.lua
+personas\EagerRookie.lua
+personas\CynicalMercenary.lua
+personas\GrizzledVeteran.lua
+personas\ZealousCrusader.lua
+guilds\_Template_Guild.lua
+guilds\ClanBattlehammer.lua
+groups\_Template_Group.lua
+profiles\_Template_Character.lua
+profiles\_Template_Character\_Core.lua
+profiles\_Template_Character\_Combat.lua
+profiles\_Template_Character\_PvP.lua
+profiles\_Template_Character\_Growth.lua
+
+# Character Profiles
+profiles\CarlNage\_Core.lua
+profiles\CarlNage\_Combat.lua
+profiles\CarlNage\_PvP.lua
+profiles\CarlNage\_Growth.lua
+profiles\WebbPage\_Core.lua
+profiles\WebbPage\_Combat.lua
+profiles\WebbPage\_PvP.lua
+profiles\WebbPage\_Growth.lua

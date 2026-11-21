@@ -1,0 +1,1224 @@
+﻿Monologue (Version .1) — Public RP & RP-PvP Engine
+Modular Engine & Implementation Blueprint for World of Warcraft (Modern 12.0+ API)
+
+
+This document presents the complete architectural specification and source implementation files for Monologue (Version .1). Monologue is a lightweight, zero-taint, modular roleplay engine for World of Warcraft Forever designed to execute real-time outgoing chat dialect translation and cooldown-gated reactive character speech.
+1. Executive Summary & Design Constraints
+* Target API: Modern World of Warcraft client (12.0+ native API execution). Zero legacy or Classic 1.12/TBC compatibility fallbacks. Built specifically for WoW Forever's roster of 9 playable races (Human, Dwarf, NightElf, Gnome, Orc, Scourge, Tauren, Troll, Skyborne) and 9 playable classes (WARRIOR, PALADIN, HUNTER, ROGUE, PRIEST, SHAMAN, MAGE, WARLOCK, DRUID).
+* Version Pinning: Strictly maintained at Monologue_v.1. Version incrementing is disallowed to maintain addon signature stability across updates.
+* Decoupled Architecture: Strict separation between engine execution logic and character data tables. Core code contains zero hardcoded race, class, or player profiles. All data files are pure, side-effect-free Lua data schemas.
+* Safety & Taint Mitigation: Centralized speech routing through an isolated "Voice Box" enforcing global cooldowns, stealth protection (IsStealthed()), deck-shuffle anti-repeat mechanics, and automatic encounter safe-mode downgrades (ADDON_RESTRICTION_STATE_CHANGED).
+* WoW Forever Lore & Spell Timeline Guardrail: Strictly restrict all dialogue, dialect flavor, historical references, and spell triggers to WoW Forever canon (Classic Azeroth plus WoW Forever's custom additions such as Zephras Isle, the Skyborne [High Order & Windshapers], Undead Paladins, and Dwarf Shamans). Characters MUST NOT reference future retail expansions (e.g., Outland/The Burning Crusade, Northrend/The Lich King's fall, Cataclysm, Pandaria, Shadowlands, Dragon Isles) or trigger on spells/abilities that do not exist in WoW Forever.
+2. Directory Structure
+Monologue_v.1/
+├── Monologue_v.1.toc          -- Interface manifest and SavedVariables definition
+├── Monologue_Core.lua         -- 4-layer profile merger, Voice Box router, event listeners, Nemesis ledger
+├── Monologue_Translator.lua   -- Outgoing chat editbox hook, dialect processor, channel stepdown
+├── Monologue_RPBridge.lua     -- Soft-dependency adapter for TRP3_API and MSP (Mary Sue Protocol)
+├── Monologue_UI.lua           -- Modern Canvas UI config, intensity selectors, test bench
+├── races/                     -- Race dialect definitions & default lines
+│   ├── _Template_Race.lua     -- Schema for racial modules
+│   └── Dwarf.lua              -- Default Dwarf dialect & racial speech pack
+├── classes/                   -- Class spell & combat reaction templates
+│   ├── _Template_Class.lua    -- Schema for class modules
+│   └── Warrior.lua            -- Default Warrior spell & combat reactions
+├── personas/                  -- Swappable theme overrides
+│   └── _Template_Persona.lua  -- Schema for character persona packs
+├── guilds/                    -- Guild-aware reaction packs
+│   └── _Template_Guild.lua    -- Schema for rank-aware guild packs
+├── groups/                    -- Addon-to-addon crew cross-talk engines
+│   └── _Template_Group.lua    -- Schema for group cross-talk & banter packs
+└── profiles/                  -- Character specific overrides
+   ├── _Template_Character.lua-- Single-file character profile schema
+   └── _Template_Character/   -- Modular multi-file character sub-folder schema
+       ├── _Core.lua          -- Dialect & basic character info
+       ├── _Combat.lua        -- Spell & combat reactions
+       ├── _PvP.lua           -- Rivalry & PvP speech pools
+       └── _Growth.lua        -- GrowthArc & BossFeats progression
+
+
+
+
+
+
+
+## 3. Core Engine Architecture
+
+
+| Layer | Component | Execution Responsibilities |
+|---|---|---|
+
+
+Profile Pipeline
+4-Layer Fallback Engine
+Deep-merges races, classes, personas (resolving dynamically based on player's chosen GrowthArc: stage1 for Levels 1–19, stage2 for Levels 20–49, stage3 for Levels 50–60), and profiles (including matching GrowthStages and unlocked BossFeats via MonologueDB.Feats) sequentially during PLAYER_LOGIN to compose a unified active profile runtime table without altering default files.
+| **Translation** | Live Chat Hook Engine | Intercepts modern editbox submissions. Applies intensity levels (Light, Standard, Unhinged), respects `*emotes*` and `((OOC))`, and enforces auto-stepdown in group channels. |
+| **Routing** | Voice Box Central Router | Manages speech queues, suppresses lines during stealth/AFK/restricted encounters, tracks global breath locks, and handles deck-shuffle pools. |
+
+
+---
+
+
+## 4. Implementation Source Code
+
+
+### 4.1 Interface Manifest
+
+
+```toc
+## Interface: 110007, 120000
+## Title: Monologue |cff00ccff(v.1)|r
+## Notes: Public RP & RP-PvP Engine with real-time dialect translation and reactive banter.
+## Author: Monologue Framework
+## Version: .1
+## SavedVariables: MonologueDB
+
+
+# Core Engine Modules
+Monologue_Core.lua
+Monologue_Translator.lua
+Monologue_RPBridge.lua
+Monologue_UI.lua
+
+
+# Data Modules: Standard Races & Classes
+races\_Template_Race.lua
+races\Dwarf.lua
+classes\_Template_Class.lua
+classes\Warrior.lua
+
+
+# Data Modules: Extended Templates
+personas\_Template_Persona.lua
+guilds\_Template_Guild.lua
+groups\_Template_Group.lua
+profiles\_Template_Character.lua
+4.2 Core Engine (Monologue_Core.lua)
+
+
+
+
+
+
+--[[
+    Monologue Engine Core (Version .1)
+    Handles 4-layer profile merging, centralized Voice Box output routing,
+    cooldown management, event registration, and the persistent Nemesis Ledger.
+--]]
+
+
+MonologueEngine = {
+    Version = ".1",
+    Data = {
+        Races = {},
+        Classes = {},
+        Personas = {},
+        Guilds = {},
+        Groups = {},
+        Profiles = {},
+    },
+    ActiveProfile = {},
+    ShuffledPools = {},
+    Cooldowns = {
+        GlobalBreath = 0,
+        Categories = {},
+    },
+    State = {
+        InRestrictedEncounter = false,
+        LastSpeechTime = 0,
+    }
+}
+
+
+local frame = CreateFrame("Frame", "MonologueCoreFrame")
+MonologueEngine.Frame = frame
+
+
+-- Persistent DB Initialization
+local DEFAULT_CONFIG = {
+    enabled = true,
+    translationIntensity = 2, -- 1: Light, 2: Standard, 3: Unhinged
+    channelStepdown = true,
+    chattiness = 1.0, -- Multiplier for proc chances
+    Rivals = {},
+    GrowthArc = { stage1 = nil, stage2 = nil, stage3 = nil },
+    Feats = {},
+}
+
+
+-- Deep Merge Utility for 4-Layer Profile Composition
+local function DeepMerge(target, source)
+    if type(target) ~= "table" then target = {} end
+    if type(source) ~= "table" then return target end
+
+
+    for k, v in pairs(source) do
+        if type(v) == "table" then
+            target[k] = DeepMerge(target[k] or {}, v)
+        else
+            target[k] = v
+        end
+    end
+    return target
+end
+
+
+-- Bloat Prevention & Long-Term Ledger Hygiene Engine
+function MonologueEngine:PruneRivals(maxEntries)
+    if not MonologueDB.Rivals then return end
+
+
+    maxEntries = maxEntries or 100
+    local now = GetServerTime()
+    local dayInSeconds = 86400
+
+
+    -- Pass 1: Evict stale single-clash and non-Nemesis entries
+    for name, rival in pairs(MonologueDB.Rivals) do
+        local totalClashes = (rival.kills or 0) + (rival.deaths or 0)
+        local ageInDays = (now - (rival.lastSeen or 0)) / dayInSeconds
+
+
+        if totalClashes == 1 and ageInDays > 30 then
+            MonologueDB.Rivals[name] = nil
+        elseif totalClashes < 5 and ageInDays > 90 then
+            MonologueDB.Rivals[name] = nil
+        end
+    end
+
+
+    -- Pass 2: Enforce strict LRU cap protecting Nemesis and pinned rivals
+    local rivalList = {}
+    for name, rival in pairs(MonologueDB.Rivals) do
+        table.insert(rivalList, { name = name, rival = rival })
+    end
+
+
+    if #rivalList > maxEntries then
+        table.sort(rivalList, function(a, b)
+            local aIsNemesis = ((a.rival.kills or 0) + (a.rival.deaths or 0)) >= 5 or a.rival.pinned
+            local bIsNemesis = ((b.rival.kills or 0) + (b.rival.deaths or 0)) >= 5 or b.rival.pinned
+            if aIsNemesis ~= bIsNemesis then
+                return aIsNemesis
+            end
+            return (a.rival.lastSeen or 0) > (b.rival.lastSeen or 0)
+        end)
+
+
+        for i = maxEntries + 1, #rivalList do
+            MonologueDB.Rivals[rivalList[i].name] = nil
+        end
+    end
+end
+
+
+-- Deck-Shuffle Pool Retrieval (Prevents raw math.random repetition)
+function MonologueEngine:GetShuffledLine(categoryKey, linesTable)
+    if not linesTable or #linesTable == 0 then return nil end
+
+
+    if not self.ShuffledPools[categoryKey] or #self.ShuffledPools[categoryKey] == 0 then
+        self.ShuffledPools[categoryKey] = {}
+        for i, line in ipairs(linesTable) do
+            table.insert(self.ShuffledPools[categoryKey], line)
+        end
+        -- Fisher-Yates Shuffle
+        for i = #self.ShuffledPools[categoryKey], 2, -1 do
+            local j = math.random(i)
+            self.ShuffledPools[categoryKey][i], self.ShuffledPools[categoryKey][j] = 
+                self.ShuffledPools[categoryKey][j], self.ShuffledPools[categoryKey][i]
+        end
+    end
+
+
+    return table.remove(self.ShuffledPools[categoryKey], 1)
+end
+
+
+-- Boss Feat Unlock Helper
+function MonologueEngine:UnlockFeat(featKey)
+    if not featKey then return end
+    MonologueDB.Feats = MonologueDB.Feats or {}
+    MonologueDB.Feats[featKey] = true
+    self:BuildActiveProfile()
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffMonologue Feat Unlocked:|r " .. featKey)
+end
+
+
+-- Profile Assembly Engine
+function MonologueEngine:BuildActiveProfile()
+    local _, raceFile = UnitRace("player")
+    local _, classFile = UnitClass("player")
+    local playerName = UnitName("player")
+    local level = UnitLevel("player") or 1
+
+
+    local merged = {}
+
+
+    -- Layer 1: Base Race
+    if self.Data.Races[raceFile] then
+        merged = DeepMerge(merged, self.Data.Races[raceFile])
+    end
+
+
+    -- Layer 2: Base Class
+    if self.Data.Classes[classFile] then
+        merged = DeepMerge(merged, self.Data.Classes[classFile])
+    end
+
+
+    -- Layer 3: Dynamic Growth Arc & Persona Overrides
+    local arcStage = "stage1"
+    local stageKey = "Stage1_Early"
+    if level >= 50 then
+        arcStage = "stage3"
+        stageKey = "Stage3_Late"
+    elseif level >= 20 then
+        arcStage = "stage2"
+        stageKey = "Stage2_Mid"
+    end
+
+
+    local selectedPersona = MonologueDB.GrowthArc and MonologueDB.GrowthArc[arcStage] or MonologueDB.selectedPersona
+    if selectedPersona and self.Data.Personas[selectedPersona] then
+        merged = DeepMerge(merged, self.Data.Personas[selectedPersona])
+    end
+
+
+    -- Layer 4: Specific Character Profile, GrowthStages & Unlocked BossFeats
+    if self.Data.Profiles[playerName] then
+        local charProfile = self.Data.Profiles[playerName]
+        merged = DeepMerge(merged, charProfile)
+
+
+        if charProfile.GrowthStages and charProfile.GrowthStages[stageKey] then
+            merged = DeepMerge(merged, charProfile.GrowthStages[stageKey])
+        end
+
+
+        if charProfile.BossFeats and MonologueDB.Feats then
+            for featKey, featData in pairs(charProfile.BossFeats) do
+                if MonologueDB.Feats[featKey] then
+                    merged = DeepMerge(merged, featData)
+                end
+            end
+        end
+    end
+
+
+    self.ActiveProfile = merged
+end
+
+
+-- Central Voice Box Router
+function MonologueEngine:Speak(text, chatType, targetUnit, categoryCooldown, emoteToken)
+    if not MonologueDB.enabled or not text or text == "" then return end
+    if IsStealthed() or UnitIsAFK("player") then return end
+
+
+    local now = GetTime()
+    if now < self.Cooldowns.GlobalBreath then return end
+
+
+    if categoryCooldown then
+        local catKey = categoryCooldown.key or "default"
+        if self.Cooldowns.Categories[catKey] and now < self.Cooldowns.Categories[catKey] then
+            return
+        end
+        self.Cooldowns.Categories[catKey] = now + (categoryCooldown.duration or 30)
+    end
+
+
+    -- Enforce Global Breath Lock (45 Seconds)
+    self.Cooldowns.GlobalBreath = now + 45
+    self.State.LastSpeechTime = now
+
+
+    -- Process Dynamic RP Tokens
+    if MonologueRPBridge then
+        text = MonologueRPBridge:ProcessTokens(text, targetUnit)
+    end
+
+
+    -- Dialect Translation Pass
+    if MonologueTranslator and chatType ~= "EMOTE" then
+        text = MonologueTranslator:Translate(text, MonologueDB.translationIntensity)
+    end
+
+
+    -- Encounter Restriction Guardrail
+    if self.State.InRestrictedEncounter then
+        -- Downgrade to local self-print during restricted encounter states to prevent taint
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[Monologue Safe-Mode]:|r " .. text)
+        return
+    end
+
+
+    -- Outgoing Routing
+    if chatType == "SAY" or chatType == "YELL" or chatType == "PARTY" then
+        C_ChatInfo.SendChatMessage(text, chatType)
+    elseif chatType == "EMOTE" then
+        C_ChatInfo.SendChatMessage(text, "EMOTE")
+    end
+
+
+    -- Cross-Faction Native Emote Pairing
+    if targetUnit and UnitIsEnemy("player", targetUnit) and emoteToken then
+        DoEmote(emoteToken, targetUnit)
+    end
+end
+
+
+-- Trigger Processing Engine
+function MonologueEngine:ProcessTrigger(tier, categoryKey, pool, chance, targetUnit, emoteToken)
+    if not pool or #pool == 0 then return end
+
+
+    local effectiveChance = (chance or 1.0) * MonologueDB.chattiness
+    if math.random() > effectiveChance then return end
+
+
+    local line = self:GetShuffledLine(categoryKey, pool)
+    if not line then return end
+
+
+    local cooldownDuration = 60
+    if tier == 1 then cooldownDuration = 60
+    elseif tier == 2 then cooldownDuration = 90
+    elseif tier == 3 then cooldownDuration = 60
+    elseif tier == 4 then cooldownDuration = 180 end
+
+
+    self:Speak(line, "SAY", targetUnit, { key = categoryKey, duration = cooldownDuration }, emoteToken)
+end
+
+
+-- Nemesis Ledger Engine
+function MonologueEngine:RecordPvPInteraction(targetName, isKill)
+    if not targetName then return end
+
+
+    MonologueDB.Rivals = MonologueDB.Rivals or {}
+    local rival = MonologueDB.Rivals[targetName] or { kills = 0, deaths = 0, lastSeen = 0, lastZone = "the wild" }
+
+
+    if isKill then
+        rival.kills = rival.kills + 1
+    else
+        rival.deaths = rival.deaths + 1
+    end
+    rival.lastSeen = GetServerTime()
+    rival.lastZone = GetRealZoneText() or "the wild"
+
+
+    MonologueDB.Rivals[targetName] = rival
+    self:PruneRivals(100)
+end
+
+
+function MonologueEngine:GetRivalTier(targetName)
+    local rival = MonologueDB.Rivals and MonologueDB.Rivals[targetName]
+    local currentZone = GetRealZoneText()
+    if MonologueDB.SkirmishHistory and MonologueDB.SkirmishHistory[currentZone] then return "DejaVu" end
+    if not rival then return "FirstClash" end
+
+
+    local total = rival.kills + rival.deaths
+    if total >= 5 then return "Nemesis"
+    elseif rival.kills >= 3 then return "Dominance"
+    elseif rival.deaths > rival.kills then return "Vendetta"
+    elseif total > 1 then return "Rematch"
+    else return "FirstClash" end
+end
+
+
+-- Event Listeners
+frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_LEVEL_UP")
+frame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+
+
+frame:SetScript("OnEvent", function(self, event, ...)
+    if event == "ADDON_LOADED" then
+        local addonName = ...
+        if addonName == "Monologue_v.1" then
+            MonologueDB = MonologueDB or {}
+            for k, v in pairs(DEFAULT_CONFIG) do
+                if MonologueDB[k] == nil then MonologueDB[k] = v end
+            end
+        end
+    elseif event == "PLAYER_LOGIN" or event == "PLAYER_LEVEL_UP" then
+        MonologueEngine:BuildActiveProfile()
+        MonologueEngine:PruneRivals(100)
+        if event == "PLAYER_LOGIN" then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffMonologue (v.1)|r core engine initialized.")
+        end
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+        local isRestricted = ...
+        MonologueEngine.State.InRestrictedEncounter = isRestricted
+    elseif event == "PLAYER_TARGET_CHANGED" then
+        if UnitExists("target") and UnitIsPlayer("target") and UnitIsEnemy("player", "target") then
+            if not C_PvP.IsBattleground() and not C_PvP.IsArena() then
+                local tName = UnitName("target")
+                local tier = MonologueEngine:GetRivalTier(tName)
+                local pvpLines = MonologueEngine.ActiveProfile.PvPLines
+                if pvpLines and pvpLines[tier] then
+                    MonologueEngine:ProcessTrigger(3, "PvP_" .. tier, pvpLines[tier], 0.4, "target", "THREATEN")
+                end
+            end
+        end
+    end
+end)
+
+
+-- Slash Command Handler
+SLASH_MONOLOGUE1 = "/mono"
+SLASH_MONOLOGUE2 = "/monologue"
+SlashCmdList["MONOLOGUE"] = function(msg)
+    local cmd, arg = strsplit(" ", msg, 2)
+    cmd = string.lower(cmd or "")
+
+
+    if cmd == "ui" or cmd == "config" or cmd == "" then
+        if MonologueUI then MonologueUI:Toggle() end
+    elseif cmd == "toggle" then
+        MonologueDB.enabled = not MonologueDB.enabled
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffMonologue:|r Engine is now " .. (MonologueDB.enabled and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r"))
+    elseif cmd == "reload" then
+        MonologueEngine:BuildActiveProfile()
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffMonologue:|r Profile reassembled.")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffMonologue Commands:|r /mono ui | /mono toggle | /mono reload")
+    end
+end
+4.3 Live Chat Dialect Translator (Monologue_Translator.lua)
+--[[
+    Monologue Dialect Translator (Version .1)
+    Hooks outgoing chat submissions to apply phonetic dialect transformations.
+    Enforces OOC protection, emote protection, and channel stepdown rules.
+--]]
+
+
+MonologueTranslator = {
+    DefaultSwaps = {},
+    DefaultPhonetics = {},
+}
+
+
+-- Core Translation Engine
+function MonologueTranslator:Translate(text, intensity)
+    if not text or text == "" or intensity == 0 then return text end
+    
+    -- Command & Slash Bypass
+    if text:sub(1, 1) == "/" then return text end
+    
+    -- Preserve Emotes (*text*) and OOC ((text)) via Marker Tokens
+    local preservedBlocks = {}
+    local function Preserve(match)
+        table.insert(preservedBlocks, match)
+        return "___PRESERVED_" .. #preservedBlocks .. "___"
+    end
+    
+    -- Mask OOC
+    text = text:gsub("%(%b()%)", Preserve)
+    -- Mask Asterisk Emotes
+    text = text:gsub("%*.-%*", Preserve)
+    
+    local dialect = MonologueEngine.ActiveProfile.Dialect or {}
+    
+    -- Tier 1: Light Intensity (Vocabulary & Greetings Swap Only)
+    if intensity >= 1 and dialect.wordSwaps then
+        for word, replacement in pairs(dialect.wordSwaps) do
+            local pattern = "%f[%a]" .. word .. "%f[%A]"
+            text = text:gsub(pattern, replacement)
+        end
+    end
+    
+    -- Tier 2: Standard Intensity (Phonetic Rules)
+    if intensity >= 2 and dialect.phonetics then
+        for pattern, replacement in pairs(dialect.phonetics) do
+            text = text:gsub(pattern, replacement)
+        end
+    end
+    
+    -- Tier 3: Unhinged Intensity (Suffix Additions & Fluff)
+    if intensity >= 3 then
+        if dialect.suffixes and #dialect.suffixes > 0 and math.random() < 0.35 then
+            local suffix = dialect.suffixes[math.random(#dialect.suffixes)]
+            text = text .. " " .. suffix
+        end
+    end
+    
+    -- Restore Preserved Blocks
+    for i, original in ipairs(preservedBlocks) do
+        text = text:gsub("___PRESERVED_" .. i .. "___", original)
+    end
+    
+    -- Enforce Client Safe 255-Character Limit
+    if #text > 255 then
+        text = text:sub(1, 252) .. "..."
+    end
+    
+    return text
+end
+
+
+-- Hook Modern Blizzard Chat Editbox Path
+local function HookChatEditBoxes()
+    for i = 1, NUM_CHAT_WINDOWS do
+        local editBox = _G["ChatFrame" .. i .. "EditBox"]
+        if editBox and not editBox.MonologueHooked then
+            editBox:HookScript("OnEnterPressed", function(self)
+                local text = self:GetText()
+                local chatType = self:GetAttribute("chatType")
+                
+                -- Channel Auto-Stepdown Logic
+                if MonologueDB.channelStepdown then
+                    if chatType == "RAID" or chatType == "INSTANCE_CHAT" or chatType == "WHISPER" or chatType == "GUILD" then
+                        return -- Completely bypass translation in competitive/private channels
+                    elseif chatType == "PARTY" then
+                        text = MonologueTranslator:Translate(text, 1) -- Step down to Light (1)
+                        self:SetText(text)
+                        return
+                    end
+                end
+                
+                if chatType == "SAY" or chatType == "YELL" then
+                    text = MonologueTranslator:Translate(text, MonologueDB.translationIntensity)
+                    self:SetText(text)
+                end
+            end)
+            editBox.MonologueHooked = true
+        end
+    end
+end
+
+
+local hookFrame = CreateFrame("Frame")
+hookFrame:RegisterEvent("PLAYER_LOGIN")
+hookFrame:SetScript("OnEvent", function()
+    HookChatEditBoxes()
+end)
+4.4 Soft-Dependency RP Bridge (Monologue_RPBridge.lua)
+
+
+
+
+--[[
+    Monologue RP Bridge (Version .1)
+    Provides soft-dependency resolution for TRP3_API and MSP (Mary Sue Protocol).
+    Evaluates IC/OOC player flags and parses dynamic replacement tokens.
+--]]
+
+
+MonologueRPBridge = {}
+
+
+-- Safely Checks IC Status via TRP3 or MSP
+function MonologueRPBridge:IsPlayerIC()
+    if TRP3_API and TRP3_API.profile then
+        local status = TRP3_API.profile.getPlayerCurrentProfile().player.character.v or 1
+        return status == 1 -- 1 = IC, 2 = OOC
+    elseif msp and msp.mystatus then
+        return msp.mystatus.field["IC"] == "1"
+    end
+    return true -- Default to IC if no external RP addon is active
+end
+
+
+-- Dynamic Token Resolution Engine
+function MonologueRPBridge:ProcessTokens(text, targetUnit)
+    if not text or text == "" then return "" end
+
+
+    -- Dynamic Replacement: {rpname}
+    if text:find("{rpname}") then
+        local rpName = UnitName("player")
+        if TRP3_API and TRP3_API.r then
+            rpName = TRP3_API.r.name("player") or rpName
+        end
+        text = text:gsub("{rpname}", rpName)
+    end
+
+
+    -- Dynamic Replacement: {target}
+    if text:find("{target}") then
+        local tName = targetUnit and UnitName(targetUnit) or "stranger"
+        if targetUnit and TRP3_API and TRP3_API.r then
+            tName = TRP3_API.r.name(targetUnit) or tName
+        end
+        text = text:gsub("{target}", tName)
+    end
+
+
+    -- Dynamic Replacement: {zone}
+    if text:find("{zone}") then
+        local zoneName = GetRealZoneText() or "the wild"
+        text = text:gsub("{zone}", zoneName)
+    end
+
+
+    -- Dynamic Replacement: {lastzone}
+    if text:find("{lastzone}") then
+        local lastZoneName = "our last clash"
+        if targetUnit then
+            local tName = UnitName(targetUnit)
+            if tName and MonologueDB and MonologueDB.Rivals and MonologueDB.Rivals[tName] then
+                lastZoneName = MonologueDB.Rivals[tName].lastZone or lastZoneName
+            end
+        end
+        text = text:gsub("{lastzone}", lastZoneName)
+    end
+
+
+    -- Dynamic Replacement: {rank}
+    if text:find("{rank}") then
+        local rankName = "Member"
+        if IsInGuild() then
+            rankName = select(1, GetGuildInfo("player")) or rankName
+        end
+        text = text:gsub("{rank}", rankName)
+    end
+
+
+    -- Dynamic Replacement: {opener}
+    if text:find("{opener}") then
+        local fragments = MonologueEngine.ActiveProfile.Fragments
+        local openerPool = fragments and fragments.openers
+        local opener = (openerPool and MonologueEngine:GetShuffledLine("Fragment_Opener", openerPool)) or ""
+        text = text:gsub("{opener}", opener)
+    end
+
+
+    -- Dynamic Replacement: {closer}
+    if text:find("{closer}") then
+        local fragments = MonologueEngine.ActiveProfile.Fragments
+        local closerPool = fragments and fragments.closers
+        local closer = (closerPool and MonologueEngine:GetShuffledLine("Fragment_Closer", closerPool)) or ""
+        text = text:gsub("{closer}", closer)
+    end
+
+
+    return text
+end
+4.5 Canvas Configuration Panel (Monologue_UI.lua)
+The Canvas UI configuration panel provides dynamic settings controls, including translation intensity, channel stepdowns, live translation testing, and Growth Arc stage selectors (Levels 1–19, 20–49, 50–60) allowing players to assign character persona archetypes across their growth stages directly in-game without editing Lua code.
+--[[
+    Monologue Canvas UI Config (Version .1)
+    Lightweight, modern settings frame using Canvas layout standards.
+--]]
+
+
+MonologueUI = {}
+
+
+function MonologueUI:CreatePanel()
+    if self.Frame then return end
+    
+    local f = CreateFrame("Frame", "MonologueConfigFrame", UIParent, "BackdropTemplate")
+    f:SetSize(440, 360)
+    f:SetPoint("CENTER")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    
+    f:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 }
+    })
+    
+    -- Title Text
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 20, -20)
+    title:SetText("Monologue Engine Config |cff00ccff(v.1)|r")
+    
+    -- Enable Engine Checkbox
+    local enableCb = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    enableCb:SetPoint("TOPLEFT", 20, -50)
+    enableCb.text = enableCb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    enableCb.text:SetPoint("LEFT", enableCb, "RIGHT", 5, 0)
+    enableCb.text:SetText("Enable Monologue Engine")
+    enableCb:SetChecked(MonologueDB.enabled)
+    enableCb:SetScript("OnClick", function(cb)
+        MonologueDB.enabled = cb:GetChecked()
+    end)
+    
+    -- Channel Stepdown Checkbox
+    local stepCb = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    stepCb:SetPoint("TOPLEFT", 20, -80)
+    stepCb.text = stepCb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    stepCb.text:SetPoint("LEFT", stepCb, "RIGHT", 5, 0)
+    stepCb.text:SetText("Enable Channel Auto-Stepdown (Party/Raid)")
+    stepCb:SetChecked(MonologueDB.channelStepdown)
+    stepCb:SetScript("OnClick", function(cb)
+        MonologueDB.channelStepdown = cb:GetChecked()
+    end)
+    
+    -- Intensity Dropdown Label
+    local intLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    intLabel:SetPoint("TOPLEFT", 20, -120)
+    intLabel:SetText("Translation Intensity Tier:")
+    
+    -- Live Test Bench Inputs
+    local testBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    testBox:SetSize(260, 30)
+    testBox:SetPoint("TOPLEFT", 20, -160)
+    testBox:SetAutoFocus(false)
+    testBox:SetText("Hello friend, are you going to the mountain?")
+    
+    local testBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    testBtn:SetSize(120, 30)
+    testBtn:SetPoint("LEFT", testBox, "RIGHT", 10, 0)
+    testBtn:SetText("Test Translate")
+    
+    local outText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    outText:SetPoint("TOPLEFT", 20, -200)
+    outText:SetSize(400, 40)
+    outText:SetJustifyH("LEFT")
+    outText:SetText("|cff888888Output preview will appear here...|r")
+    
+    testBtn:SetScript("OnClick", function()
+        local input = testBox:GetText()
+        local translated = MonologueTranslator:Translate(input, MonologueDB.translationIntensity)
+        outText:SetText("|cff00ff00Result:|r " .. translated)
+    end)
+    
+    -- Close Button
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    closeBtn:SetSize(100, 25)
+    closeBtn:SetPoint("BOTTOMRIGHT", -20, 20)
+    closeBtn:SetText("Close")
+    closeBtn:SetScript("OnClick", function() f:Hide() end)
+    
+    f:Hide()
+    self.Frame = f
+end
+
+
+function MonologueUI:Toggle()
+    self:CreatePanel()
+    if self.Frame:IsShown() then
+        self.Frame:Hide()
+    else
+        self.Frame:Show()
+    end
+end
+
+________________
+
+
+5. Standardized Pure-Data Modules
+5.1 Race Template (races/_Template_Race.lua)
+
+
+--[[
+    Monologue Data Module: Race Template
+    PURE DATA TABLE. NO ENGINE LOGIC ALLOWED.
+--]]
+
+
+MonologueEngine.Data.Races["_Template_Race"] = {
+    Dialect = {
+        wordSwaps = {
+            ["hello"] = "greetings",
+            ["friend"] = "companion",
+            ["yes"] = "indeed",
+        },
+        phonetics = {
+            ["ing%f[%A]"] = "in'",
+        },
+        suffixes = {
+            ", traveler.",
+            ", by the light.",
+        }
+    },
+    GuildGreetings = {
+        Standard = {
+            "Greetings, traveler.",
+            "May your path be clear.",
+        }
+    },
+    PvPLines = {
+        Rematch = { "You return for more?" },
+        Vendetta = { "I haven't forgotten what happened back in {lastzone}, {target}!" },
+        Dominance = { "Yield, you are outmatched!" },
+        Nemesis = { "Our clash ends here today, {target}! I'll send you back to {lastzone}!" },
+    }
+}
+5.2 Dwarf Race Implementation (races/Dwarf.lua)
+
+
+--[[
+    Monologue Data Module: Dwarf Race
+    PURE DATA TABLE.
+--]]
+
+
+MonologueEngine.Data.Races["Dwarf"] = {
+    Dialect = {
+        wordSwaps = {
+            ["you"] = "ye",
+            ["your"] = "yer",
+            ["my"] = "me",
+            ["hello"] = "greetings",
+            ["friend"] = "lad",
+            ["friends"] = "lads",
+            ["girl"] = "lass",
+            ["beer"] = "ale",
+            ["drink"] = "swig",
+            ["little"] = "wee",
+            ["of"] = "o'",
+            ["and"] = "an'",
+        },
+        phonetics = {
+            ["ing%f[%A]"] = "in'",
+            ["%f[%a]th"] = "d",
+        },
+        suffixes = {
+            ", by Magni's beard!",
+            ", aye!",
+            ", mind yer feet.",
+        }
+    },
+    GuildGreetings = {
+        Standard = {
+            "Keep yer feet on the ground!",
+            "Safe journey, lad.",
+            "Interest ya in a tankard o' ale?",
+        }
+    },
+    PvPLines = {
+        Rematch = { "Back for another round, eh?" },
+        Vendetta = { "I haven't forgotten what happened back in {lastzone}, {target}!" },
+        Dominance = { "Ha! Ye fight like a trogg!" },
+        Nemesis = { "Yer name is written in me book o' grudges! I'll send ye back to {lastzone}!" },
+    }
+}
+5.3 Class Template (classes/_Template_Class.lua)
+--[[
+    Monologue Data Module: Class Template
+    PURE DATA TABLE. NO ENGINE LOGIC ALLOWED.
+--]]
+
+
+MonologueEngine.Data.Classes["_Template_Class"] = {
+    SpellReactions = {
+        Tier1_MajorCD = {
+            "Unleashing full power!",
+        },
+        Tier2_Routine = {
+            "Striking target!",
+        },
+        Tier3_LowHP = {
+            "I require assistance!",
+        }
+    },
+    pvpStyle = "Aggressive"
+}
+5.4 Warrior Class Implementation (classes/Warrior.lua)
+a
+--[[
+Monologue Data Module: Warrior Class
+PURE DATA TABLE.
+--]]
+
+
+-- UnitClass("player") returns all-caps classFile keys (e.g. "WARRIOR", "PALADIN", "SHAMAN")
+-- UnitRace("player") returns non-localized raceFile keys (e.g. "Dwarf", "NightElf", "Scourge")
+MonologueEngine.Data.Classes["WARRIOR"] = {
+SpellReactions = {
+Tier1_MajorCD = {
+"For honor and victory!",
+"I'll cleave you in twain!",
+"Taste my blade!",
+},
+Tier2_Routine = {
+"Feel the steel!",
+"Back down!",
+"Another strike!",
+},
+Tier3_LowHP = {
+"I'm not down yet!",
+"A fine cut... but I still stand!",
+"Healers, to me!",
+}
+},
+pvpStyle = "Frontline Brawler"
+}
+
+
+
+### 5.5 Persona Template (`personas/_Template_Persona.lua`)
+
+
+```lua
+--[[
+    Monologue Data Module: Swappable Persona Override Template
+    PURE DATA TABLE.
+--]]
+
+
+MonologueEngine.Data.Personas["_Template_Persona"] = {
+    Dialect = {
+        wordSwaps = {
+            ["yes"] = "affirmative",
+            ["no"] = "negative",
+        }
+    },
+    SpellReactions = {
+        Tier1_MajorCD = {
+            "Executing primary combat protocol!",
+        }
+    }
+}
+5.6 Guild Template (guilds/_Template_Guild.lua)
+--[[
+    Monologue Data Module: Rank-Aware Guild Pack Template
+    PURE DATA TABLE.
+--]]
+
+
+MonologueEngine.Data.Guilds["_Template_Guild"] = {
+    guildName = "Order of the Shield",
+    rankGreetings = {
+        [0] = { "Hail, High Commander!" },       -- Guild Leader
+        [1] = { "Salute, Officer!" },             -- Officer
+        [2] = { "Hail, Veteran." },              -- Veteran
+        [3] = { "Welcome, Brother in arms." },   -- Member
+        [4] = { "Stand tall, Recruit." },         -- Initiate
+    },
+    mottos = {
+        "Shields up, hearts firm!",
+    }
+}
+5.7 Group Template (groups/_Template_Group.lua)
+--[[
+    Monologue Data Module: Crew Cross-Talk Template
+    PURE DATA TABLE.
+--]]
+
+
+MonologueEngine.Data.Groups["_Template_Group"] = {
+    groupID = "StandardCrew",
+    crossTalk = {
+        Tank = {
+            Healer = "Keep me standing, friend!",
+            DPS = "Focus my mark!",
+        },
+        Healer = {
+            Tank = "Don't jump in out of line-of-sight!",
+        }
+    },
+    nemesisBackup = {
+        "Hold on! I've got your back against that rival!",
+    }
+}
+5.8 Character Override Template (profiles/_Template_Character.lua)
+
+
+
+
+--[[
+    Monologue Data Module: Character-Specific Override Template
+    PURE DATA TABLE. Top tier priority in the 4-layer fallback merger.
+
+
+    MULTIFILE SUB-FOLDER STRUCTURE (OPTIONAL):
+    For complex characters, profiles can be split across profiles/CharacterName/ sub-files:
+      profiles/CharacterName/_Core.lua   -- Dialect & basic character info
+      profiles/CharacterName/_Combat.lua -- Spell & combat reactions
+      profiles/CharacterName/_PvP.lua    -- Rivalry & PvP speech pools
+      profiles/CharacterName/_Growth.lua -- GrowthArc & BossFeats progression
+    Use: MonologueEngine.Data.Profiles["CharacterName"] = MonologueEngine.Data.Profiles["CharacterName"] or {}
+    in each sub-file to extend the profile table safely across multiple files.
+--]]
+
+
+MonologueEngine.Data.Profiles["_Template_Character"] = MonologueEngine.Data.Profiles["_Template_Character"] or {
+    Dialect = {
+        wordSwaps = {
+            ["gold"] = "shinies",
+        }
+    },
+    Fragments = {
+        openers = {
+            "By the tides,",
+            "Mark my words,",
+            "Listen well,",
+        },
+        closers = {
+            "or suffer the consequences!",
+            "as it was foretold.",
+            "and remember me!",
+        },
+    },
+    GrowthStages = {
+        Stage1_Early = { -- Levels 1-19: Idealistic novice
+            SpellReactions = {
+                Tier1_MajorCD = { "I hope this works!" },
+            },
+        },
+        Stage2_Mid = { -- Levels 20-49: Battle-tested adventurer
+            SpellReactions = {
+                Tier1_MajorCD = { "Stand behind me!" },
+            },
+        },
+        Stage3_Late = { -- Levels 50-60: Veteran hero
+            SpellReactions = {
+                Tier1_MajorCD = { "By my honor, you fall today!" },
+            },
+        },
+    },
+    BossFeats = {
+        RAGNAROS = { -- Unlocked after defeating Ragnaros in Molten Core
+            PvPLines = {
+                Nemesis = { "{opener} I have faced the Firelord himself, {target}! You cannot burn me {closer}" },
+            },
+        },
+        ONYXIA = { -- Unlocked after defeating Onyxia
+            PvPLines = {
+                Dominance = { "I've slain dragons in their lair, {target}! You are nothing!" },
+            },
+        },
+    },
+    PvPLines = {
+        Nemesis = { "{opener} You again? I'll make sure you stay down, {target}! {closer}" },
+        Vendetta = { "I haven't forgotten our duel in {lastzone}, {target}!" },
+    }
+}
+
+________________
+
+
+6. Verification & Live Test Procedures
+To verify that the engine is functional on a fresh character installation:
+
+
+1. Copy the Monologue_v.1 directory into the WoW client path: <WoW_Forever_Client>\Interface\AddOns\Monologue_v.1.
+2. Launch the client and verify that the addon is enabled in the AddOn Manager.
+3. Log in with a Dwarf Warrior character.
+4. Confirm initialization output in the primary chat frame:
+Monologue (v.1) core engine initialized.
+5. Open the edit box and type /say Hello friend, do you want a beer?.
+6. Confirm translated outgoing output:
+[Say]: Greetings lad, do ye want an ale, by Magni's beard!
+7. Open config panel via /mono ui, enter test text into the Live Test Bench, and verify output preview.
+
+
+7. Phased Claude Implementation Prompts
+7.1 Pass 1: Core Engine & Manifest Prompt
+
+
+Act as an expert World of Warcraft Lua addon developer writing Monologue_v.1 (Modern WoW 12.0+ API native, strictly zero legacy fallbacks, strictly zero taint). Generate the complete source code for Pass 1 of the implementation.
+
+
+## TECHNICAL GUARDRAILS & CONSTRAINTS:
+1. Version Pinning: Strictly pinned to Monologue_v.1 in manifest and core definitions.
+2. API Standard: Use C_ChatInfo.SendChatMessage instead of legacy SendChatMessage. Use modern 12.0+ C_PvP and event systems.
+3. Zero Taint & Safe Mode: Handle ADDON_RESTRICTION_STATE_CHANGED to set State.InRestrictedEncounter and suppress outgoing chat during restricted boss encounters.
+4. Pure-Data Separation: Core engine code must contain ZERO hardcoded racial, class, or player speech lines or dialects.
+5. Dynamic GrowthArc & Feats: Evaluate UnitLevel("player") dynamically during BuildActiveProfile() (1-19 -> stage1/Stage1_Early, 20-49 -> stage2/Stage2_Mid, 50-60 -> stage3/Stage3_Late), merge selected GrowthArc personas and GrowthStages blocks, inject unlocked BossFeats (MonologueDB.Feats), auto-rebuild on PLAYER_LEVEL_UP, and provide UnlockFeat(featKey) helper for raid boss kills (strictly restricted to WoW Forever bosses/canon).
+6. Full Output Requirement: Provide COMPLETE, production-ready code files without placeholders, omitted blocks, or `...` comments.
+
+
+## FILES TO GENERATE IN PASS 1:
+- Monologue_v.1.toc (Manifest listing SavedVariables: MonologueDB and all module files)
+- Monologue_Core.lua (4-layer profile merger with GrowthArc/GrowthStages/BossFeats integration, Voice Box router, global breath cooldowns, deck-shuffle pool retriever, Nemesis ledger with LRU eviction and SkirmishHistory zone compression, DejaVu tier detection)
+7.2 Pass 2: Translator, RP Bridge & Canvas UI Prompt
+
+
+
+
+Act as an expert World of Warcraft Lua addon developer building Pass 2 of Monologue_v.1 (Modern WoW 12.0+ API native).
+
+
+## TECHNICAL GUARDRAILS & CONSTRAINTS:
+1. Chat Editbox Hooks: Hook modern Blizzard editboxes cleanly. Apply channel auto-stepdown rules (Party steps down to Light intensity 1; Raid, Guild, Whisper bypass translation entirely).
+2. Masking & Preservation: Preserve OOC ((...)) and asterisk emotes (*...*) using temporary string tokens before applying phonetic/vocabulary dialect swaps, then restore them intact.
+3. Soft-Dependency Bridge: Soft-connect with TRP3_API and MSP for IC/OOC state verification and dynamic token replacement ({rpname}, {target}, {zone}, {lastzone}, {rank}, {opener}, {closer}). Resolve optional {opener} and {closer} fragment tokens from MonologueEngine.ActiveProfile.Fragments via GetShuffledLine.
+4. Modern Canvas UI & GrowthArc Selectors: Create a clean settings panel using standard Canvas/Backdrop templates with Live Test Bench execution and in-game GrowthArc stage selectors (Levels 1–19, 20–49, 50–60) to configure character persona archetypes without editing Lua files.
+5. Full Output Requirement: Provide COMPLETE, ready-to-run files with no omitted lines or placeholders.
+
+
+## FILES TO GENERATE IN PASS 2:
+- Monologue_Translator.lua
+- Monologue_RPBridge.lua
+- Monologue_UI.lua
+7.3 Pass 3A: Pure-Data Templates Prompt
+
+
+
+
+
+
+
+
+Act as an expert World of Warcraft Lua addon developer building Pass 3A of Monologue_v.1 (Modern WoW 12.0+ API native).
+
+
+## TECHNICAL GUARDRAILS & CONSTRAINTS:
+1. Pure Data Tables: All data modules must be side-effect-free pure Lua tables registering into MonologueEngine.Data without execution logic. Demonstrate multi-file character sub-folder splitting support (profiles/CharacterName/_Core.lua, _Combat.lua, _PvP.lua, _Growth.lua) using MonologueEngine.Data.Profiles["Name"] = MonologueEngine.Data.Profiles["Name"] or {}.
+2. Standard Schema: Adhere strictly to the established profile schema including wordSwaps, phonetics, suffixes, Fragments (openers, closers), GuildGreetings, PvPLines (FirstClash, DejaVu, Rematch, Vendetta, Dominance, Nemesis), GrowthStages (Stage1_Early, Stage2_Mid, Stage3_Late), and BossFeats (e.g. RAGNAROS, ONYXIA).
+3. Dynamic Token Integration: Ensure speech line strings utilize {target}, {zone}, {lastzone}, {opener}, and {closer} tokens correctly alongside handcrafted lines.
+4. Strict WoW Forever Canon & Spell Pool Only: Base all dialogue, lore references, GrowthArc stages, boss feats, and spell triggers strictly on WoW Forever (Classic Azeroth + WoW Forever custom content: Skyborne, Undead Paladins, Dwarf Shamans). Do NOT reference lore events that have not happened yet (no TBC, WotLK, Cataclysm, Pandaria, Legion, Shadowlands, or Dragonflight lore) and do NOT create spell triggers or voice lines for abilities that do not exist in WoW Forever.
+5. Full Output Requirement: Provide COMPLETE, valid Lua code for all schema template modules.
+
+
+## FILES TO GENERATE IN PASS 3A:
+- races/_Template_Race.lua
+- classes/_Template_Class.lua
+- personas/_Template_Persona.lua
+- guilds/_Template_Guild.lua
+- groups/_Template_Group.lua
+- profiles/_Template_Character.lua (showing single-file schema and multi-file sub-folder structure comments)
+7.4 Pass 3B: All Playable Races for WoW Forever Prompt
+
+
+
+
+Act as an expert World of Warcraft Lua addon developer building Pass 3B of Monologue_v.1 (Modern WoW 12.0+ API native).
+
+
+## TECHNICAL GUARDRAILS & CONSTRAINTS:
+1. Pure Data Tables: Generate pure-data race files under races/ keyed by exact raceFile string returned by UnitRace("player") for the 9 playable races in WoW Forever:
+   - Alliance: "Human", "Dwarf", "NightElf", "Gnome"
+   - Horde: "Orc", "Scourge", "Tauren", "Troll"
+   - Neutral / Faction-Choice: "Skyborne" (Shen'dorei — include FactionSubtypes or dialect/lore flavor supporting both Alliance High Order arcane exiles and Horde Windshapers)
+2. Schema Compliance: Provide wordSwaps, phonetics, suffixes, GuildGreetings, and PvPLines tailored to each race's lore and dialect.
+3. Manifest Integration: Register every generated race file in Monologue_v.1.toc.
+4. Strict WoW Forever Canon & Spell Pool Only: Base all dialogue, lore references, and spell triggers strictly on WoW Forever (Classic Azeroth + WoW Forever custom content: Skyborne, Undead Paladins, Dwarf Shamans). Do NOT reference lore events that have not happened yet (no TBC, WotLK, Cataclysm, Pandaria, Legion, Shadowlands, or Dragonflight lore) and do NOT create spell triggers or voice lines for abilities that do not exist in WoW Forever.
+5. Full Output Requirement: Provide COMPLETE, production-ready code files without placeholders.
+
+
+## FILES TO GENERATE IN PASS 3B:
+- All 9 playable race files under races/
+- Updated Monologue_v.1.toc including all 9 race files
+7.5 Pass 3C: All Playable Classes for WoW Forever Prompt
+
+
+
+
+Act as an expert World of Warcraft Lua addon developer building Pass 3C of Monologue_v.1 (Modern WoW 12.0+ API native).
+
+
+## TECHNICAL GUARDRAILS & CONSTRAINTS:
+1. Pure Data Tables: Generate pure-data class files in classes/ keyed by exact all-caps classFile string returned by UnitClass("player") for the 9 playable classes in WoW Forever: "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID". (Explicitly exclude Death Knight, Monk, Demon Hunter, and Evoker).
+2. WoW Forever Lore Flexibility: Ensure spell reactions and combat banter lines support WoW Forever's expanding race/class combinations (e.g., Undead Paladins, Dwarf Shamans, Skyborne Druids/Mages/Shamans) without breaking core class fantasy.
+3. Spell Reactions: Include Tier 1 (Major CDs), Tier 2 (Routine Spells), and Tier 3 (Low HP) reaction lines tailored to each class fantasy.
+4. Manifest Integration: Register every generated class file in Monologue_v.1.toc.
+5. Strict WoW Forever Canon & Spell Pool Only: Base all dialogue, lore references, and spell triggers strictly on WoW Forever (Classic Azeroth + WoW Forever custom content: Skyborne, Undead Paladins, Dwarf Shamans). Do NOT reference lore events that have not happened yet (no TBC, WotLK, Cataclysm, Pandaria, Legion, Shadowlands, or Dragonflight lore) and do NOT create spell triggers or voice lines for abilities that do not exist in WoW Forever.
+6. Full Output Requirement: Provide COMPLETE, production-ready code files without placeholders.
+
+
+## FILES TO GENERATE IN PASS 3C:
+- All 9 playable class files under classes/
+- Updated Monologue_v.1.toc including all 9 class files
+
