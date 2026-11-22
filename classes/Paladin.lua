@@ -30,18 +30,6 @@ MonologueEngine.Data.Classes["PALADIN"] = {
             ["for justice"] = { "for righteousness", "for what is right" },
             ["stand with me"] = { "stand beside me", "walk with me in the Light" },
         },
-        openers = {
-            "By the Light,",
-            "In faith,",
-            "Hear me,",
-            "As the Light wills,",
-        },
-        closers = {
-            ", by the Light.",
-            ", in faith.",
-            ", so is justice served.",
-            ", the Light guide us.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

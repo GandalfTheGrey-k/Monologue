@@ -6,8 +6,8 @@
     "Scourge", "Skyborne". Copy this file, rename it, and change the key below.
     Keys beginning with "_Template" are never matched to a player.
 
-    Tokens usable in any line: {target} {zone} {lastzone} {rpname} {rank} {opener} {closer}
-    ({opener}/{closer} draw from Fragments, see profiles/_Template_Character.lua)
+    Tokens usable in any line: {target} {zone} {lastzone} {rpname} {rank} {opener}
+    ({opener} is a fighting oath from Dialect.oaths, written as its own sentence)
 
     Dialect rules (full format notes are at the top of Monologue_Translator.lua):
       wordSwaps     case-insensitive word replacement (Light intensity and up). A string is one
@@ -17,17 +17,17 @@
                     longest first; strings or variant lists
       phonetics     Lua patterns applied per lower-cased word (Standard intensity and up)
       contractions  like phraseSwaps, but each match is used only part of the time
-      interjections dropped in after the first comma of longer lines
-      openers       prepended at Unhinged intensity (never twice in a row)
-      closers       appended at Unhinged intensity ("suffixes" is the older name)
+      oaths         { Greet = {...}, Fight = {...}, Hurt = {...} }: short exclamations,
+                    each its own sentence, said now and then before a greeting (Greet),
+                    a kill line or battle cry (Fight) or a low-health line (Hurt)
 
     Canon guardrail: WoW Forever canon only (Classic Azeroth plus WoW Forever additions).
     No Outland, Northrend, Cataclysm, Pandaria, Shadowlands or Dragon Isles references.
 
     OPTIONAL: Presets and StanceGreetings (chosen in the My Voice tab)
-      Presets = { Key = { name, blurb, dialectIntensity (-1..+1), openers, closers,
+      Presets = { Key = { name, blurb, dialectIntensity (-1..+1), oaths,
                           FriendGreetings = { Default = {...} }, BattleCry = {...} } }
-        A preset replaces openers/closers/BattleCry, merges FriendGreetings, and shifts the
+        A preset replaces oaths/BattleCry, merges FriendGreetings, and shifts the
         translation intensity tier. Applied right after the race pack, before class/persona.
       StanceGreetings = {
           WARM = {...}, ADMIRING = {...}, PLAYFUL = {...},       -- general lines, any target race
@@ -76,10 +76,6 @@ MonologueEngine.Data.Races["_Template_Race"] = {
         phonetics = {
             ["ing%f[%A]"] = "in'",
         },
-        suffixes = {
-            ", traveler.",
-            ", by the light.",
-        }
     },
     GuildGreetings = {
         Standard = {

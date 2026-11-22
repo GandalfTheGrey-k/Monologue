@@ -30,18 +30,6 @@ MonologueEngine.Data.Classes["ROGUE"] = {
             ["i'll scout ahead"] = { "I'll slip ahead", "let me take a look" },
             ["it's a trap"] = { "that smells of a trap", "something's rigged" },
         },
-        openers = {
-            "Quietly,",
-            "Between us,",
-            "Word is,",
-            "Listen close,",
-        },
-        closers = {
-            ", between us.",
-            ", if anyone asks.",
-            ", quiet like.",
-            ", keep it dark.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

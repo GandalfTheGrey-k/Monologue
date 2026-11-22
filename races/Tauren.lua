@@ -55,26 +55,12 @@ MonologueEngine.Data.Races["Tauren"] = {
             ["^gonna$"] = "going to",
             ["^wanna$"] = "wish to",
         },
-        interjections = { "it is said", "truly", "as the elders say", "kin" },
-        openers = {
-            "Hear me, kin,",
-            "Earth Mother guide me,",
-            "By the Earth Mother,",
-            "Listen,",
-            "Walk with me,",
-            "The elders say,",
-            "Think on this,",
-            "Peace,",
-        },
-        closers = {
-            ", Earth Mother guide you.",
-            ", so the elders say.",
-            ", and the hunt goes on.",
-            ", so it is.",
-            ", walk well.",
-            ", may the earth hold you.",
-            ", as the winds allow.",
-            ", for the herd.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Earth Mother guide you.", "Peace, friend.", "Well met.", "Hm. Greetings." },
+            Fight = { "For the Earth Mother!", "For the herd!", "Hrah!", "Thunder Bluff stands!", "For Mulgore!" },
+            Hurt = { "Earth Mother, steady me!", "Hrm!", "I am not felled yet!", "Spirits, give me strength!" },
         },
     },
     GuildGreetings = {
@@ -167,29 +153,13 @@ MonologueEngine.Data.Races["Tauren"] = {
             "The thunder of the plains comes for you, {target}!",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         EarthMotherPilgrim = {
             name = "Earth Mother's Pilgrim",
             blurb = "Gentle and devout, walks the plains in service of the Earth Mother.",
             dialectIntensity = -1,
-            openers = {
-                "The Earth Mother's blessing,",
-                "Walk softly,",
-                "Peace upon you,",
-                "The land listens,",
-                "As the plains whisper,",
-                "In harmony,",
-            },
-            closers = {
-                ", the Earth Mother watch over you.",
-                ", may the earth hold you.",
-                ", walk in peace.",
-                ", as the grass bends.",
-                ", the land remembers.",
-                ", be at peace.",
-            },
             FriendGreetings = {
                 Default = {
                     "The Earth Mother's blessing upon you, {target}.",
@@ -207,22 +177,6 @@ MonologueEngine.Data.Races["Tauren"] = {
             name = "Plains Hunter",
             blurb = "Patient and fierce, a spear-wielder who lives by the herds of Mulgore.",
             dialectIntensity = 0,
-            openers = {
-                "Steady,",
-                "The wind carries,",
-                "Track the herd,",
-                "Hunt well,",
-                "Wait,",
-                "On the plains,",
-            },
-            closers = {
-                ", the hunt is honest.",
-                ", the wind agrees.",
-                ", steady now.",
-                ", the plains provide.",
-                ", as the herd moves.",
-                ", with patience.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. Good hunting to you.",
@@ -240,22 +194,6 @@ MonologueEngine.Data.Races["Tauren"] = {
             name = "Elder Speaker",
             blurb = "Slow, weighty and proverb-laden: speaks as if each word were counted.",
             dialectIntensity = -1,
-            openers = {
-                "As the elders say,",
-                "Long ago,",
-                "Remember,",
-                "The old saying goes,",
-                "Hear a thing,",
-                "Patience,",
-            },
-            closers = {
-                ", so the elders taught.",
-                ", that is the way.",
-                ", and the land agrees.",
-                ", as it has always been.",
-                ", mark it well.",
-                ", and be wise.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. Come, listen. The tale is long and worth it.",

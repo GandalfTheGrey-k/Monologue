@@ -7,7 +7,7 @@
 
     Pools here replace the lower layers' pools of the same name; word swaps merge into the
     race's (chosen to avoid the race packs' own keys). The race accent still runs over
-    these lines when they are spoken, and the race's suffix flourishes are kept.
+    these lines when they are spoken, and the race's oaths are kept.
 --]]
 
 MonologueEngine.Data.Personas["GrizzledVeteran"] = {
@@ -19,18 +19,6 @@ MonologueEngine.Data.Personas["GrizzledVeteran"] = {
             ["rookie"] = "greenhorn",
             ["young"] = "green",
             ["old"] = "seasoned",
-        },
-    },
-    Fragments = {
-        openers = {
-            "Mark me,",
-            "In all my years,",
-            "Hear me out,",
-        },
-        closers = {
-            "I've seen it before.",
-            "And that's the truth of it.",
-            "Mark my words.",
         },
     },
     GuildGreetings = {

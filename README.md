@@ -9,6 +9,7 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 ---
 
 ## Contents
+- [What's new in 0.1.3](#whats-new-in-013)
 - [Install](#install)
 - [Updating](#updating)
 - [First steps](#first-steps)
@@ -19,6 +20,21 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
   - [Rivals & Friends (roster)](#rivals--friends-roster)
 - [Slash commands](#slash-commands)
 - [FAQ & troubleshooting](#faq--troubleshooting)
+
+---
+
+## What's new in 0.1.3
+
+- **Oaths replace openers and closers.** The old bits glued onto lines ("Pull up a stool, … pass the jug.") are gone. Now and then a short oath comes *before* a greeting, a kill line, a low-health line or a battle cry, as its own sentence ("Gol'kosh! FER IRONFORGE!"). Never on chat you type. Your old custom openers and closers carry over as **My Oaths**.
+- **Preview above the chat box.** See how your message will come out while you type; what you see is what's sent.
+- **Words Never Translated.** Your own list of names and words the accent never touches (`/mono keep <word>`). Titles stay with names ("Lady Jaina").
+- **In / out of character.** A keybind (or `/mono ic` / `/mono ooc`) switches translation and automatic lines off and on. The minimap book goes grey while you're out of character.
+- **Smarter "lad / lass".** Words you call someone ("friend" → lad, lass, mate) follow the pronouns in your own line, never your target.
+- **Fewer repeats in a fight.** At most 2 lines per fight, each move speaks once per fight, and the same mob won't get a second pull line for 10 minutes.
+- **Everyday moments.** An occasional line when you eat or drink, mount up, walk into an inn or city, or see a party member fall.
+- **Speech effects.** Slurred when you're drunk, shaky when you're badly hurt (General tab).
+- **Guild greeting fixed.** Your My Voice guild greeting now works in any guild and comes before race greetings.
+- **Real Dwarf battle cries.** "KHAZ MODAN!", "GOL'KOSH!", "REMEMBER GRIM BATOL!"
 
 ---
 
@@ -43,9 +59,15 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 
 ## Updating
 
-Download the new zip from the same button and extract it over the old `Monologue_v.1` folder, replacing files when asked. Your settings and character data are kept; they live in WoW's saved variables, not in the addon folder. Then `/reload`.
+1. **Close the game** (or log out to the character screen).
+2. **Delete** the old folder `World of Warcraft\_forever_\Interface\AddOns\Monologue_v.1`. This clears out any files the new version no longer uses.
+3. **Download** the new `Monologue_v.1.zip` with the green **Download** button at the top; it always gives the latest release.
+4. **Extract** it into `AddOns\` exactly as in [Install](#install), and check that `AddOns\Monologue_v.1\Monologue_v.1.toc` exists.
+5. **Start the game** and type **`/mono version`** to confirm the new version number.
 
-If a group or guild member runs a newer version, Monologue tells you once in chat.
+Your settings and character data are kept: they live in WoW's saved variables (`WTF` folder), not in the addon folder, so deleting the old folder is safe.
+
+If a group or guild member runs a newer version, Monologue tells you once in chat. Every release and its notes are on the [Releases page](https://github.com/GandalfTheGrey-k/Monologue/releases).
 
 ---
 
@@ -67,13 +89,15 @@ If a group or guild member runs a newer version, Monologue tells you once in cha
 |---|---|
 | **Monologue is on** | Master switch for the whole addon. |
 | **Lighter accent in group chat (party, raid, instance)** | Steps the accent down to Light in group chat so calls stay readable. |
-| **Accent strength** | How thick the accent is everywhere: **Off**, **Light** (vocabulary), **Standard** (+ accent, some openers/closers), **Unhinged** (+ frequent openers/closers). Applies to lines you *type* too. |
+| **Accent strength** | How thick the accent is everywhere: **Off**, **Light** (vocabulary), **Standard** (+ accent, the odd oath), **Unhinged** (+ more oaths). The accent applies to lines you *type* too; oaths never do. |
 | **Greetings & reactions** | What happens to lines that don't come from a key press: said in `/s` on your **next ability press** (greetings wait 10 seconds, other lines up to a minute), or shown **only in your chat**. |
 | **Personality by Level** | Optional: pick a persona (Eager Rookie, Cynical Mercenary, Grizzled Veteran, Zealous Crusader) for each level range, so your character grows up as you level. |
 | **Try Your Accent** | Type any line and press **Translate** to hear it in your character's accent. Nothing is sent. |
 | **Debug Mode** | Prints `[Monologue Debug]` lines showing why each line was or wasn't said. Off by default. |
 | **Strict Safe-Mode (Manual & Local Only)** | For players who want **zero automated public chat**. Every automatic line (pulls, greetings, reactions, party banter) shows *only in your own chat window*. Typed chat is still translated, and the Battle Cry and Greet buttons still speak. Same as `/mono safemode`. |
 | **Translate in** | Pick which chat channels get your accent: **Say, Yell, Party, Raid, Instance, Guild, Officer, Whisper**. Covers both what you type and Monologue's own lines. Default: Say, Yell and Party. Numbered channels (trade, general, LFG) are never translated. |
+| **Preview above the chat box** | While you type, a line just above the chat box shows how your message will come out. What you see is exactly what is sent. On by default. |
+| **Speech effects** | Your words slur when you're drunk (more the drunker you are: "Thish ish my lasht pint") and shake when you're badly hurt in a fight ("W-we need to fall back..."). On by default. |
 | **Rivals & Friends** | Opens the roster window (see below). |
 
 ### Voice Lines tab
@@ -90,9 +114,10 @@ Where and how often your character speaks in `/s`.
 | **React to the world** | How often a pull line reacts to the moment instead (an undead target, a rare, low mana, the mob that killed you…). Your spell's own lines still lead on most pulls. |
 | **Battle Cry button / Greet button** | Optional on-screen buttons. **Battle Cry** shouts a line. **Greet** says hello to your target, and glows when a greeting or reply is waiting to be said. Right-drag to move them. Keybinds: *Key Bindings → AddOns → Monologue*. |
 | **Reply when players emote at me** | Answers `/wave`, `/bow`, `/cheer`, `/hug` and the like. |
+| **Everyday moments** | Now and then a short line when you sit down to eat or drink, mount up, walk into an inn or city, or see a party member fall. |
 | **Right Now** | Live status: is speech on here, when the next line is possible, pull progress, and what your lines could react to. |
 
-The engine also keeps a fixed **45-second "breath"** between any two automatic lines, and never sends more than one automatic `/s`, `/y` or `/e` line every 6 seconds.
+The engine also keeps a fixed **45-second "breath"** between any two automatic lines, and never sends more than one automatic `/s`, `/y` or `/e` line every 6 seconds. In a fight it says **at most 2 lines**, each move speaks **once per fight**, and the same mob or player won't get a second pull line for 10 minutes.
 
 ### My Voice tab (character builder)
 
@@ -100,7 +125,7 @@ Everything here is saved **per character** and sits on top of your race and clas
 
 **Identity & Persona**
 - **Persona preset:** the attitude of your combat lines (Eager Rookie, Cynical Mercenary, Grizzled Veteran, Zealous Crusader), or follow *Personality by Level*.
-- **Racial Temperament:** three flavours per race (for example Dwarf: *Jovial Tavern-Keep*, *Grumpy Iron-Vet*, *Rune & Stone Scholar*). Each changes greetings, battle cries, openers and closers, and nudges the accent.
+- **Racial Temperament:** three flavours per race (for example Dwarf: *Jovial Tavern-Keep*, *Grumpy Iron-Vet*, *Rune & Stone Scholar*). Each changes greetings and battle cries, and nudges the accent.
 - **Reset Customizations**, **Fill Starter Examples**, **Preview My Voice** (prints a sample greeting, line and battle cry in your chat).
 
 **Azeroth Identity**
@@ -117,14 +142,15 @@ Everything here is saved **per character** and sits on top of your race and clas
   - **Nemesis:** a name. Used as `{nemesis}`.
   - **Catchphrase:** a sentence you always say. Used as `{catchphrase}`.
   - Your hometown works the same way as `{hometown}`.
-- **Dialect Strength:** **Full Dialect** (your General-tab accent), **Light Flavor** (key word swaps and openers/closers, no respelling), **Clean** (plain spelling; your clan, allegiance and traits still shape *what* you say).
+- **Dialect Strength:** **Full Dialect** (your General-tab accent), **Light Flavor** (key word swaps and the odd oath, no respelling), **Clean** (plain spelling; your clan, allegiance and traits still shape *what* you say).
 
 **Cross-Race Stances**
 Pick a race and a stance (warm, admiring, playful, wary, gruff, disdainful) to set how you greet friendly players of that race.
 
 **Your own lines**
-- **Custom Openers & Closers:** "By my blade," / ", or so I swore." Added to your pool.
-- **Word & Phrase Swaps:** "friend → pal, mate, comrade" (separate variants with commas).
+- **My Oaths:** short exclamations like "By my blade!", added to your race's own. Now and then one is said before a greeting, a kill line, a low-health line or a battle cry ("By Magni's beard! Another one down."). Never on chat you type.
+- **Words Never Translated:** names and words the accent never touches, in any letter case (shared by all your characters), e.g. `battlehammer`. Capitalised names mid-sentence and titles with names ("Lady Jaina") are kept automatically.
+- **Word & Phrase Swaps:** "friend → pal, mate, comrade" (separate variants with commas). Words you use to *address* someone follow the pronouns in your own line: "Thanks, friend, she saved us" gives "lass", "he" or "him" gives "lad", and a line with neither gives "mate" or "pal". Who you are targeting is never used.
 - **Signature Battle Cries:** added to your Battle Cry pool. Each has a **Preview**.
 - **Guild Greeting:** said when you target a guildmate. Use `{target}` for their name.
 - Live details work in your own lines too: `{weapon}`, `{spell}`, `{mob}`, `{party}`, `{myhp}` and more (`/mono tokens` lists them).
@@ -160,6 +186,8 @@ All commands start with `/mono` (`/mono help` lists them in game).
 | `/mono safemode` | Strict Safe-Mode on/off |
 | `/mono cry [yell\|say]` | Shout a battle cry now |
 | `/mono greet` | Greet your friendly target (or say a waiting line) |
+| `/mono ic` · `/mono ooc` | In character, or out of character (no translation, no automatic lines; the minimap book goes grey). Also a keybind: *Key Bindings → AddOns → Monologue* |
+| `/mono keep <word>` · `/mono unkeep <word>` | Add or remove a word that is never translated (`/mono keep` lists them) |
 | `/mono friend [note]` · `/mono unfriend [name]` · `/mono friends` | Mark, unmark, list friends |
 | `/mono rivals` · `/mono duels` | List your rivals or duel records |
 | `/mono pin <name>` · `/mono unpin <name>` | Protect a rival from being cleared |
@@ -201,7 +229,7 @@ All commands start with `/mono` (`/mono help` lists them in game).
 `/mono` → **My Voice** → **Export**, then Ctrl+C. Your friend pastes the `MONO1:` string into the same box and presses **Import**. It replaces their custom voice; anything that doesn't fit their character (a clan of another race, say) is skipped and listed.
 
 **The accent is too strong (or too weak).**
-**General → Accent strength** sets it everywhere. For your character only, **My Voice → Dialect Strength → Light Flavor** (words and openers, no respelling) or **Clean** (plain spelling).
+**General → Accent strength** sets it everywhere. For your character only, **My Voice → Dialect Strength → Light Flavor** (words only, no respelling) or **Clean** (plain spelling).
 
 **How does Strict Safe-Mode work?**
 With it on, nothing automatic is ever said publicly for you. Pull lines, greetings, reactions and party banter appear only in *your* chat window. Your typed chat is still translated, and clicking **Battle Cry** or **Greet** (or `/mono cry`) still speaks, because those are your own explicit actions. Toggle it on the General tab or with `/mono safemode`.

@@ -29,18 +29,6 @@ MonologueEngine.Data.Classes["PRIEST"] = {
             ["bless you"] = { "blessings upon you", "the Light keep you" },
             ["i'll pray for you"] = { "you are in my prayers", "I will beseech the Light for you" },
         },
-        openers = {
-            "Peace,",
-            "Be calm,",
-            "Hear me,",
-            "My friend,",
-        },
-        closers = {
-            ", peace be with you.",
-            ", may it be so.",
-            ", blessings upon you.",
-            ", if faith allows.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

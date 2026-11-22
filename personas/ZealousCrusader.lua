@@ -8,7 +8,7 @@
 
     Pools here replace the lower layers' pools of the same name; word swaps merge into the
     race's (chosen to avoid the race packs' own keys). The race accent still runs over
-    these lines when they are spoken, and the race's suffix flourishes are kept.
+    these lines when they are spoken, and the race's oaths are kept.
 --]]
 
 MonologueEngine.Data.Personas["ZealousCrusader"] = {
@@ -19,18 +19,6 @@ MonologueEngine.Data.Personas["ZealousCrusader"] = {
             ["duty"] = "sacred duty",
             ["evil"] = "wicked",
             ["honor"] = "sacred honor",
-        },
-    },
-    Fragments = {
-        openers = {
-            "By my oath,",
-            "Hear me,",
-            "In the Light's name,",
-        },
-        closers = {
-            "so it is sworn.",
-            "and justice will follow.",
-            "let none doubt it.",
         },
     },
     GuildGreetings = {

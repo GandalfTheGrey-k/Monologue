@@ -54,26 +54,12 @@ MonologueEngine.Data.Races["NightElf"] = {
             ["^gonna$"] = "going to",
             ["^wanna$"] = "wish to",
         },
-        interjections = { "mark me", "truly", "by Elune", "it is said" },
-        openers = {
-            "By Elune,",
-            "Hear me,",
-            "Beneath the moon,",
-            "Kindred,",
-            "Listen,",
-            "Mark my words,",
-            "In the grove's name,",
-            "Ishnu-alah,",
-        },
-        closers = {
-            ", Elune-adore.",
-            ", by the grace of Elune.",
-            ", as the moon is my witness.",
-            ", so the forest remembers.",
-            ", beneath the stars.",
-            ", Elune willing.",
-            ", thus it is.",
-            ", may the grove endure.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Ishnu-alah!", "Elune be with you.", "Ande'thoras-ethil.", "Well met." },
+            Fight = { "By Elune!", "Elune-adore!", "For Teldrassil!", "By the moon!", "For the Sentinels!" },
+            Hurt = { "Elune, give me strength!", "Mother Moon, guide me!", "Not yet!", "I will not fall!" },
         },
     },
     GuildGreetings = {
@@ -166,29 +152,13 @@ MonologueEngine.Data.Races["NightElf"] = {
             "Elune, guide my blade. {target} falls tonight!",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         MoonlitSentinel = {
             name = "Moonlit Sentinel",
             blurb = "Vigilant and solemn, a watcher who guards the night for Elune.",
             dialectIntensity = 0,
-            openers = {
-                "Elune watches,",
-                "Stay vigilant,",
-                "Under the moon,",
-                "The night is long,",
-                "Be watchful,",
-                "By Elune's light,",
-            },
-            closers = {
-                ", Elune guide us.",
-                ", under the moonlight.",
-                ", the watch continues.",
-                ", in Elune's name.",
-                ", the night remembers.",
-                ", stay vigilant.",
-            },
             FriendGreetings = {
                 Default = {
                     "Elune's light upon you, {target}. The watch is quieter with you here.",
@@ -206,22 +176,6 @@ MonologueEngine.Data.Races["NightElf"] = {
             name = "Grove Warden",
             blurb = "Nurturing and ancient, speaks for the forest and its slow wisdom.",
             dialectIntensity = -1,
-            openers = {
-                "The grove whispers,",
-                "Listen to the leaves,",
-                "As the roots remember,",
-                "Patience, little one,",
-                "Ancient oaks say,",
-                "By root and bough,",
-            },
-            closers = {
-                ", as the seasons turn.",
-                ", so the grove grows.",
-                ", root and bough.",
-                ", the forest remembers.",
-                ", gently now.",
-                ", all things in their time.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. The forest is gladdened by your steps.",
@@ -239,22 +193,6 @@ MonologueEngine.Data.Races["NightElf"] = {
             name = "Moon-Swift Wanderer",
             blurb = "Sharp-tongued and restless, a long-lived wanderer with a taste for mischief.",
             dialectIntensity = 1,
-            openers = {
-                "Mmm, well,",
-                "Ten thousand years and still,",
-                "Oh, do keep up,",
-                "Quickly now,",
-                "A thought,",
-                "As I was saying,",
-            },
-            closers = {
-                ", if you must know.",
-                ", and it amuses me.",
-                ", naturally.",
-                ", but what do I know?",
-                ", moving on.",
-                ", ever so briefly.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! You've aged a decade since I blinked. Well met.",

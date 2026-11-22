@@ -7,7 +7,7 @@
 
     Pools here replace the lower layers' pools of the same name; word swaps merge into the
     race's (chosen to avoid the race packs' own keys). The race accent still runs over
-    these lines when they are spoken, and the race's suffix flourishes are kept.
+    these lines when they are spoken, and the race's oaths are kept.
 --]]
 
 MonologueEngine.Data.Personas["CynicalMercenary"] = {
@@ -19,18 +19,6 @@ MonologueEngine.Data.Personas["CynicalMercenary"] = {
             ["job"] = "contract",
             ["favor"] = "debt",
             ["reward"] = "payment",
-        },
-    },
-    Fragments = {
-        openers = {
-            "Look,",
-            "Listen,",
-            "For the record,",
-        },
-        closers = {
-            "Nothing personal.",
-            "That's the price.",
-            "Don't say I didn't warn you.",
         },
     },
     GuildGreetings = {

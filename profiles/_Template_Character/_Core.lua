@@ -11,26 +11,11 @@ MonologueEngine.Data.Profiles["_Template_Character_Split"].Dialect = {
     wordSwaps = {
         ["gold"] = "shinies",
     },
-    suffixes = {
-        ", mark my words.",
-    },
 }
 
-MonologueEngine.Data.Profiles["_Template_Character_Split"].Fragments = {
-    openers = {
-        "By the tides,",
-        "Mark my words,",
-        "Listen well,",
-    },
-    closers = {
-        "or suffer the consequences!",
-        "as it was foretold.",
-        "and remember me!",
-    },
-}
 
 MonologueEngine.Data.Profiles["_Template_Character_Split"].GuildGreetings = {
     Standard = {
-        "{opener} well met, {rank}.",
+        "{opener} Well met, {rank}.",
     },
 }

@@ -28,7 +28,7 @@ MonologueEngine.Data.Profiles["_Template_Character_Split"].GrowthStages = {
 MonologueEngine.Data.Profiles["_Template_Character_Split"].BossFeats = {
     RAGNAROS = { -- Unlocked after defeating Ragnaros in Molten Core
         PvPLines = {
-            Nemesis = { "{opener} I have faced the Firelord himself, {target}! You cannot burn me {closer}" },
+            Nemesis = { "{opener} I have faced the Firelord himself, {target}! You cannot burn me!" },
         },
     },
     ONYXIA = { -- Unlocked after defeating Onyxia

@@ -7,7 +7,7 @@ MonologueEngine.Data.Profiles["_Template_Character_Split"] = MonologueEngine.Dat
 
 MonologueEngine.Data.Profiles["_Template_Character_Split"].SpellReactions = {
     Tier1_MajorCD = {
-        "{opener} this ends now!",
+        "{opener} This ends now!",
     },
     Tier2_Routine = {
         "Again!",

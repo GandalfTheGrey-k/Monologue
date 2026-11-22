@@ -12,12 +12,14 @@ MonologueEngine.Data.Profiles["CarlNage"] = MonologueEngine.Data.Profiles["CarlN
 
 -- Shouted on demand by /mono cry and the Battle Cry button. Battle cries may shout.
 MonologueEngine.Data.Profiles["CarlNage"].BattleCry = {
+    "BATTLEHAMMER!",
     "FER IRONFORGE!",
-    "BY MAGNI'S BEARD, TA ARMS!",
-    "CLAN BATTLEHAMMER STANDS!",
-    "COME GET SOME, YE BEARDLESS WHELPS!",
-    "HAMMER DOWN! HAMMER DOWN!",
-    "NO DWARF EVER BACKED OFF A SCRAP!",
+    "KHAZ MODAN!",
+    "BATTLEHAMMERS, TO ME!",
+    "GOL'KOSH!",
+    "HAMMERS DOWN!",
+    "FER THE CLAN!",
+    "REMEMBER GRIM BATOL!",
 }
 
 MonologueEngine.Data.Profiles["CarlNage"].SpellReactions = {

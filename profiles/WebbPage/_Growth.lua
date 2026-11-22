@@ -79,7 +79,7 @@ MonologueEngine.Data.Profiles["WebbPage"].BossFeats = {
     RAGNAROS = { -- Unlocked after defeating Ragnaros in Molten Core
         PvPLines = {
             Nemesis = {
-                "{opener} I stood in the Firelord's halls and kept my fur, {target}! You can't burn me! {closer}",
+                "{opener} I stood in the Firelord's halls and kept my fur, {target}! You can't burn me!",
                 "I walked through Molten Core with my roots intact, {target}!",
                 "The Firelord couldn't burn the wild out of me, {target}!",
                 "Fire and fury, {target}? I've seen worse!",

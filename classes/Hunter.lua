@@ -30,18 +30,6 @@ MonologueEngine.Data.Classes["HUNTER"] = {
             ["i'm tracking"] = { "I'm on the trail", "I've found the spoor" },
             ["aim for"] = { "mark the target", "take your aim at" },
         },
-        openers = {
-            "Quiet,",
-            "Steady,",
-            "Mark that,",
-            "On the trail,",
-        },
-        closers = {
-            ", true aim.",
-            ", steady now.",
-            ", the hunt goes on.",
-            ", quiet as the grass.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

@@ -54,26 +54,12 @@ MonologueEngine.Data.Races["Gnome"] = {
             ["^gonna$"] = "going to",
             ["^wanna$"] = "want to",
         },
-        interjections = { "fascinating", "by my sprockets", "as expected", "in theory" },
-        openers = {
-            "Fascinating,",
-            "Observe,",
-            "Hypothetically,",
-            "By my calculations,",
-            "Aha,",
-            "Listen,",
-            "Excellent,",
-            "Technically,",
-        },
-        closers = {
-            ", by my sprockets!",
-            ", in theory.",
-            ", with minimal explosions.",
-            ", according to my calculations.",
-            ", probably.",
-            ", for science!",
-            ", assuming nothing catches fire.",
-            ", as the blueprints say.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Hello there!", "Ooh, hello!", "Salutations!", "Well met!" },
+            Fight = { "For Gnomeregan!", "Sprockets!", "For science!", "Gears and glory!", "Engage!" },
+            Hurt = { "Oh, bother!", "Sprockets and sparks!", "That's not ideal!", "Ow ow ow!", "Not in the specs!" },
         },
     },
     GuildGreetings = {
@@ -166,29 +152,13 @@ MonologueEngine.Data.Races["Gnome"] = {
             "Gnomeregan remembers, {target}! Engage!",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         Tinkerer = {
             name = "Gadget Tinkerer",
             blurb = "Precise and distracted: always mid-repair, always certain the gear will hold.",
             dialectIntensity = 0,
-            openers = {
-                "Hold on, calibrating,",
-                "Interesting,",
-                "If my calculations hold,",
-                "Hmm, a gear's loose,",
-                "Mind the sprocket,",
-                "Observe,",
-            },
-            closers = {
-                ", probably.",
-                ", by my calculations.",
-                ", assuming no explosions.",
-                ", the gears agree.",
-                ", tolerance is acceptable.",
-                ", it should hold.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! Hold this wrench, would you? Oh, hello!",
@@ -206,22 +176,6 @@ MonologueEngine.Data.Races["Gnome"] = {
             name = "Eager Inventor",
             blurb = "Bubbly and breathless: every idea is the best one yet.",
             dialectIntensity = 1,
-            openers = {
-                "Oh oh oh,",
-                "Wait wait wait,",
-                "I just had an idea,",
-                "Ooh,",
-                "You'll love this,",
-                "Listen listen,",
-            },
-            closers = {
-                ", isn't that wonderful?",
-                ", and then it goes boom!",
-                ", I can't wait!",
-                ", brilliant, right?",
-                ", oh, the possibilities!",
-                ", faster, faster!",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! You came! I have so many things to show you!",
@@ -239,22 +193,6 @@ MonologueEngine.Data.Races["Gnome"] = {
             name = "Deadpan Engineer",
             blurb = "Understated, sardonic and quietly unimpressed by anything not mechanical.",
             dialectIntensity = -1,
-            openers = {
-                "Fascinating,",
-                "Sure,",
-                "If you insist,",
-                "Naturally,",
-                "Oh, wonderful,",
-                "As predicted,",
-            },
-            closers = {
-                ", how thrilling.",
-                ", I'm sure.",
-                ", moving on.",
-                ", noted.",
-                ", fine.",
-                ", or not.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. Oh. You're here. Excellent.",

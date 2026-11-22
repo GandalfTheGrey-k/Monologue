@@ -29,18 +29,6 @@ MonologueEngine.Data.Classes["SHAMAN"] = {
             ["in balance"] = { "in harmony", "with the elements at peace" },
             ["thank the spirits"] = { "give thanks to the spirits", "the spirits are generous" },
         },
-        openers = {
-            "The spirits say,",
-            "Hear the elements,",
-            "By earth and storm,",
-            "Listen,",
-        },
-        closers = {
-            ", so the spirits say.",
-            ", as the elements wish.",
-            ", earth and sky willing.",
-            ", the totems stand.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

@@ -69,26 +69,12 @@ MonologueEngine.Data.Races["Troll"] = {
             ["%f[%a]th"] = "d",
             ["ing%f[%A]"] = "in'",
         },
-        interjections = { "mon", "ya know", "dat be true", "I tell ya" },
-        openers = {
-            "Listen, mon,",
-            "Hey,",
-            "Hear me,",
-            "Ya know,",
-            "Da loa say,",
-            "Mark dis,",
-            "Let me tell ya,",
-            "Easy, mon,",
-        },
-        closers = {
-            ", mon.",
-            ", da loa watch ya.",
-            ", ya know?",
-            ", I tell ya.",
-            ", dat be da truth.",
-            ", fo' sure.",
-            ", by da loa.",
-            ", easy, mon.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Hey, mon!", "Ey, mon!", "Well met, mon!", "Da loa be wit' ya!" },
+            Fight = { "Ha ha!", "Da loa be wit' me!", "Darkspear!", "For Vol'jin!", "Spirits, take dem!" },
+            Hurt = { "Ay, mon!", "Dat hurt, mon!", "Bwonsamdi can wait!", "Not yet, mon!", "Loa, help me!" },
         },
     },
     GuildGreetings = {
@@ -181,29 +167,13 @@ MonologueEngine.Data.Races["Troll"] = {
             "Dis be da end, {target}! Darkspear never die!",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         LoaDevotee = {
             name = "Loa Devotee",
             blurb = "Reverent and mystical, speaks of the loa and ancient Zul'jin-era wisdom.",
             dialectIntensity = 0,
-            openers = {
-                "The loa say,",
-                "Hear dis,",
-                "By de spirits,",
-                "Mon,",
-                "De ancestors know,",
-                "Mark da voodoo,",
-            },
-            closers = {
-                ", so da loa watch.",
-                ", by da spirits.",
-                ", dat is da way.",
-                ", mon.",
-                ", da loa willin'.",
-                ", an' dat's da truth.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}, mon! Da loa smile on dis meetin'.",
@@ -221,22 +191,6 @@ MonologueEngine.Data.Races["Troll"] = {
             name = "Jungle Hunter",
             blurb = "Quiet and sharp-eyed: the stalker from the Echo Isles.",
             dialectIntensity = 0,
-            openers = {
-                "Shh,",
-                "Watch,",
-                "Stay low,",
-                "Da trail says,",
-                "Listen close,",
-                "Eyes open,",
-            },
-            closers = {
-                ", quiet now.",
-                ", watch da brush.",
-                ", da hunt goes on.",
-                ", stay low.",
-                ", mon.",
-                ", da jungle knows.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. Quiet steps, I like dat.",
@@ -254,22 +208,6 @@ MonologueEngine.Data.Races["Troll"] = {
             name = "Grinning Trickster",
             blurb = "Teasing, fast-talking and irreverent; the Darkspear prankster.",
             dialectIntensity = 1,
-            openers = {
-                "Ya see,",
-                "Heh heh,",
-                "Ooh, listen,",
-                "Mon, mon, mon,",
-                "Guess what,",
-                "Pay attention,",
-            },
-            closers = {
-                ", heh heh.",
-                ", an' dat's da joke.",
-                ", mon, ya wish.",
-                ", or maybe not.",
-                ", what a day!",
-                ", surprise!",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! Ya look terrible! Dat's a joke, mon!",

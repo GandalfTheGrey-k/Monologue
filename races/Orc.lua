@@ -54,26 +54,12 @@ MonologueEngine.Data.Races["Orc"] = {
             ["^wont$"] = "will not",
             ["^gonna$"] = "going to",
         },
-        interjections = { "hah", "mark me", "by my blade", "truly" },
-        openers = {
-            "Lok'tar,",
-            "Hear me,",
-            "Listen well,",
-            "For the Horde,",
-            "Blood and thunder,",
-            "Know this,",
-            "By my axe,",
-            "Mark this,",
-        },
-        closers = {
-            ", lok'tar ogar!",
-            ", for the Horde!",
-            ", blood and thunder!",
-            ", victory or death!",
-            ", by my axe.",
-            ", and so it is.",
-            ", strength and honor.",
-            ", for the Warchief!",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Lok'tar!", "Throm-ka!", "Strength and honor!", "Aka'magosh!" },
+            Fight = { "Lok'tar ogar!", "Blood and thunder!", "For the Horde!", "Hah!", "Victory or death!" },
+            Hurt = { "Is that all?!", "Blood and fire!", "I've had worse!", "Not yet!", "Grrah!" },
         },
     },
     GuildGreetings = {
@@ -166,29 +152,13 @@ MonologueEngine.Data.Races["Orc"] = {
             "Lok'tar ogar! {target}, your end is here!",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         HonorBound = {
             name = "Honor-Bound Warrior",
             blurb = "Disciplined and proud: Durotar's honor code, spoken plainly.",
             dialectIntensity = 0,
-            openers = {
-                "By my honor,",
-                "Hear me,",
-                "Lok'tar,",
-                "Stand tall,",
-                "Warrior's word,",
-                "Honor demands,",
-            },
-            closers = {
-                ", lok'tar ogar!",
-                ", by my honor.",
-                ", as the warriors do.",
-                ", and I will not waver.",
-                ", with honor.",
-                ", so I swear.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! Lok'tar! You honor me with your presence.",
@@ -206,22 +176,6 @@ MonologueEngine.Data.Races["Orc"] = {
             name = "Spirit-Caller",
             blurb = "Thoughtful, reverent and in tune with the elements of the Horde's shamanic tradition.",
             dialectIntensity = -1,
-            openers = {
-                "The spirits say,",
-                "Hear the earth,",
-                "As the elements speak,",
-                "By ancestors' word,",
-                "Listen,",
-                "The totems know,",
-            },
-            closers = {
-                ", so the spirits whisper.",
-                ", the ancestors guide.",
-                ", as the earth wills.",
-                ", in the elements' name.",
-                ", and so be it.",
-                ", spirits willing.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. The spirits are gentle upon your arrival.",
@@ -239,22 +193,6 @@ MonologueEngine.Data.Races["Orc"] = {
             name = "Blood-and-Thunder Brawler",
             blurb = "Loud, aggressive, delighted by battle.",
             dialectIntensity = 1,
-            openers = {
-                "Ha!",
-                "Hear this,",
-                "Come on,",
-                "Blood and thunder,",
-                "Stand and fight,",
-                "Mok'gora,",
-            },
-            closers = {
-                ", and let's break something!",
-                ", ha!",
-                ", blood and thunder!",
-                ", or get out of the way!",
-                ", let's go!",
-                ", I like these odds.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! There you are! Ready for a fight?",

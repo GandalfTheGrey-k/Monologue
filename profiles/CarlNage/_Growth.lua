@@ -16,12 +16,12 @@ MonologueEngine.Data.Profiles["CarlNage"] = MonologueEngine.Data.Profiles["CarlN
 MonologueEngine.Data.Profiles["CarlNage"].GrowthStages = {
     Stage1_Early = { -- Levels 1-19: green recruit, loud and eager
         BattleCry = {
-            "FER THE CLAN! I THINK!",
-            "BATTLEHAMMER! THAT'S ME!",
-            "WAIT FER ME! CHARGE!",
-            "IRONFORGE! HERE I COME!",
-            "BY MAGNI'S BEARD, AT 'EM!",
-            "FIRST ONE TO THE AXE!",
+            "BATTLEHAMMER! AT 'EM!",
+            "FER IRONFORGE!",
+            "KHAZ MODAN!",
+            "FER THE CLAN!",
+            "AXE UP! CHARGE!",
+            "FIRST BLOOD TA THE BATTLEHAMMERS!",
         },
     },
     Stage2_Mid = { -- Levels 20-49: seasoned fighter, cocky and sharp
@@ -30,18 +30,18 @@ MonologueEngine.Data.Profiles["CarlNage"].GrowthStages = {
             "INTO 'EM, LADS!",
             "HOLD THE LINE!",
             "FER IRONFORGE!",
-            "STEEL AN' STONE!",
-            "NOBODY BACKS DOWN!",
+            "BATTLEHAMMERS, FORWARD!",
+            "GOL'KOSH!",
         },
     },
     Stage3_Late = { -- Levels 50-60: hardened veteran, calm and dangerous
         BattleCry = {
-            "I'VE BURIED BETTER THAN YE!",
-            "THE OLD DWARF STILL SWINGS!",
             "BATTLEHAMMER ETERNAL!",
-            "FROM THE FORGE TO THE GRAVE!",
-            "STAND WI' ME ONE MORE TIME!",
-            "BY STONE AN' GRUDGE!",
+            "REMEMBER GRIM BATOL!",
+            "STAND WI' ME, KIN!",
+            "THE OLD HAMMER STILL FALLS!",
+            "KHAZ MODAN!",
+            "FROM THE FORGE TA THE GRAVE!",
         },
         SpellReactions = {
             Tier3_LowHP = {

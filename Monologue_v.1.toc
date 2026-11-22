@@ -2,7 +2,7 @@
 ## Title: Monologue |cff00ccff(v.1)|r
 ## Notes: Public RP & RP-PvP Engine with real-time dialect translation and reactive banter.
 ## Author: Monologue Framework
-## Version: 0.1.2
+## Version: 0.1.3
 ## Category: Roleplay
 ## SavedVariables: MonologueDB
 ## SavedVariablesPerCharacter: MonologueCharDB
@@ -29,6 +29,7 @@ races\Skyborne.lua
 zones\Zones.lua
 situations\Situations.lua
 situations\Details.lua
+situations\Moments.lua
 identity\Identity.lua
 identity\Builder.lua
 identity\Layers.lua

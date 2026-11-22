@@ -8,8 +8,8 @@
     A persona sits above race and class: its SpellReactions and PvPLines pools replace the
     lower layers' pools of the same name, while its Dialect word swaps merge into the race's
     (they are chosen so they never collide with a race's own swaps). The race accent still
-    runs over these lines when they are spoken. No suffixes are defined so the race's
-    flourishes are kept.
+    runs over these lines when they are spoken. The race's oaths are
+    kept.
 --]]
 
 MonologueEngine.Data.Personas["EagerRookie"] = {
@@ -20,18 +20,6 @@ MonologueEngine.Data.Personas["EagerRookie"] = {
             ["ok"] = "absolutely",
             ["maybe"] = "surely",
             ["later"] = "soon",
-        },
-    },
-    Fragments = {
-        openers = {
-            "Oh!",
-            "Honestly,",
-            "Okay, so,",
-        },
-        closers = {
-            "I think!",
-            "...probably!",
-            "I'll do my best!",
         },
     },
     GuildGreetings = {

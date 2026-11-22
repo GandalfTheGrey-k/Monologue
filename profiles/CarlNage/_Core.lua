@@ -7,7 +7,7 @@
     "Carl Nage", "Carl-Nage" or "Carl" on a realm named "Nage".
 
     Layering: race (Dwarf) < class (WARRIOR) < Growth Arc persona < this profile. Sequence
-    pools defined here (suffixes, greetings, fragments) replace the lower layers' pools.
+    pools defined here (greetings, lines) replace the lower layers' pools.
     The Dwarf accent still runs over spoken lines (-ing -> -in', you -> ye, my -> me,
     to -> tae), so lines may be written in plain English or already in dialect.
 --]]
@@ -31,28 +31,8 @@ MonologueEngine.Data.Profiles["CarlNage"].Dialect = {
     phraseSwaps = {
         ["watch out"] = { "mind yer head, lad", "duck, ye fool", "look sharp" },
     },
-    -- A profile list replaces the race's list of the same name ("suffixes" is the older
-    -- name for "closers"; either works, but use "closers" here so Carl's list replaces)
-    closers = {
-        ", by Magni's beard!",
-        ", aye.",
-        ", mind yer feet.",
-        ", so help me.",
-    },
 }
 
-MonologueEngine.Data.Profiles["CarlNage"].Fragments = {
-    openers = {
-        "By Magni's beard,",
-        "Mark me words,",
-        "Listen up, lads,",
-    },
-    closers = {
-        "or I'll box yer ears!",
-        "an' that's the end o' it.",
-        "so help me!",
-    },
-}
 
 -- Spoken when Carl targets a friendly player of that race (keys are the target's raceFile,
 -- e.g. "NightElf") and no guild-rank greeting applies. A grumble, but an honest one.

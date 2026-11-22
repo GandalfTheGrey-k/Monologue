@@ -22,23 +22,24 @@
           contractions = { ["do not"] = "dinnae" },
               -- Like phraseSwaps, but each match is only applied some of the time (Standard and up),
               -- so cadence varies from line to line.
-          interjections = { "aye", "mind ye" },
-              -- Occasionally dropped in after the first comma of a longer line.
-          openers = { "Aye,", "Listen up," },
-              -- Standard (now and then) and Unhinged (often). Prepended; skipped when the line already opens with a greeting or
-              -- exclamation. Never the same one twice in a row (last 4 are remembered).
-          closers = { ", by Magni's beard!", ", aye." },
-              -- Standard (now and then, never with an opener) and Unhinged. A closer starting with punctuation replaces the line's closing
-              -- punctuation (a question keeps its question mark). Skipped when the line already
-              -- ends in "..." or several marks. "suffixes" is an older name for the same list.
+          oaths = {
+              Greet = { "Ho there!", "Well met!" },          -- before a greeting
+              Fight = { "By Magni's beard!", "Gol'kosh!" },  -- before a kill line or battle cry
+              Hurt  = { "Blast it!", "Me beard!" },          -- before a low-health line
+              Any   = { ... },                               -- any of the above (My Voice oaths)
+          },
+              -- Short exclamations that stand as their own sentence. One is now and then put in
+              -- front of a line, but only in a moment it fits (the engine sets
+              -- MonologueEngine.State.OathMoment: Greet, Kill, LowHP or Cry). Typed chat never
+              -- gets one. A flat list is the same as Any. The last 4 used are avoided.
       }
 
     Case and punctuation: a swap keeps the case of what it replaces ("Friend" -> "Kin",
     "RUN" -> "FLEE"), and never doubles punctuation ("Watch out!" + "mind yerself!" -> "Mind yerself!").
 
     Intensity: 0 Off, 1 Light (swaps, plus a light sprinkle of phonetics and contractions),
-    2 Standard (full phonetics, more contractions, rare interjections), 3 Unhinged (+ openers,
-    closers, more interjections). Flourish chances are also scaled by the chattiness setting.
+    2 Standard (full phonetics, more contractions, the odd oath), 3 Unhinged (more oaths).
+    Oath chances are also scaled by the chattiness setting.
     A fixed swap (a single replacement string) fires most of the time, not every time
     (70% Light, 85% Standard, 95% Unhinged), so the accent varies from line to line.
 --]]
@@ -54,13 +55,16 @@ local MAX_CHAT_BYTES = 255
 
 -- How many recently used choices are avoided
 local VARIANT_HISTORY_AVOID = 3   -- word and phrase swap variants
-local FRAGMENT_HISTORY_AVOID = 4  -- openers, closers and interjections
+local FRAGMENT_HISTORY_AVOID = 4  -- oaths
 local HISTORY_LIMIT = 12
 
 -- Base chance per intensity (1 = Light, 2 = Standard, 3 = Unhinged); missing = never
-local OPENER_CHANCE = { [2] = 0.10, [3] = 0.25 }
-local CLOSER_CHANCE = { [2] = 0.12, [3] = 0.35 }
-local INTERJECTION_CHANCE = { [2] = 0.05, [3] = 0.20 }
+-- Oaths: the chance per line for each moment, the oath group it draws from, and a scale per
+-- intensity (Light Flavor counts as Light)
+local OATH_CHANCE = { Greet = 0.25, Kill = 0.20, LowHP = 0.20, Cry = 0.15 }
+local OATH_GROUP = { Greet = "Greet", Kill = "Fight", LowHP = "Hurt", Cry = "Fight" }
+local OATH_GROUPS = { "Greet", "Fight", "Hurt" }
+local OATH_INTENSITY_SCALE = { [1] = 0.5, [2] = 1.0, [3] = 1.6 }
 local CONTRACTION_CHANCE = { [1] = 0.30, [2] = 0.60, [3] = 0.90 }
 
 -- A fixed swap (one replacement, e.g. Dwarf "to" -> "tae") fires this often per word, so the
@@ -123,20 +127,6 @@ local PRESERVE_PATTERNS = {
     "%b<>",                           -- <emotes>
     "%b{}",                           -- {raid target icons} and unresolved tokens
 }
-
--- Words that already open a line like a greeting; an auto opener is never added in front of them
-local GREETING_WORDS = {}
-for word in ("hello hi hey greetings hail welcome salutations well good goodbye farewell ahoy ho oh ah "
-    .. "aye yes no nay lok'tar ishnu fair blessings behold hark listen mark"):gmatch("%S+") do
-    GREETING_WORDS[word] = true
-end
-
--- First words that read naturally in lower case after an opener ("Aye, the plan is...")
-local DECAPITALIZE = {}
-for word in ("the a an we you it this that there let's let do did can are is what where who how why when "
-    .. "my your our they he she"):gmatch("%S+") do
-    DECAPITALIZE[word] = true
-end
 
 ---------------------------------------------------------------------------
 -- Helpers
@@ -221,8 +211,8 @@ local function PickAvoiding(historyKey, pool, avoidCount)
     return pick
 end
 
--- Also used by the RP bridge for {opener} / {closer} fragments, so the same opener or closer
--- is never picked twice in a row whichever route it comes from
+-- Also used by the RP bridge for {opener} (an oath), so the same oath is never picked twice
+-- in a row whichever route it comes from
 Translator.PickAvoiding = PickAvoiding
 
 -- A replacement value may be one string or a list of strings; returns a list or nil
@@ -275,7 +265,7 @@ local function CompileDialect(dialect)
 
     compiled = {
         words = {}, phrases = {}, contractions = {}, phonetics = {},
-        openers = {}, closers = {}, interjections = {},
+        oaths = {}, oathCount = 0,
     }
 
     -- A key with anything but letters and apostrophes (a space, say) is a phrase wherever it
@@ -337,9 +327,13 @@ local function CompileDialect(dialect)
         end
     end
 
-    compiled.openers = CompileStringList(dialect.openers)
-    compiled.closers = CompileStringList(dialect.closers, dialect.suffixes) -- suffixes = older name
-    compiled.interjections = CompileStringList(dialect.interjections)
+    -- Oaths per group; "Any" (or a flat list) goes into every group
+    local oaths = type(dialect.oaths) == "table" and dialect.oaths or {}
+    local any = #oaths > 0 and oaths or oaths.Any
+    for _, group in ipairs(OATH_GROUPS) do
+        compiled.oaths[group] = CompileStringList(oaths[group], any)
+        compiled.oathCount = compiled.oathCount + #compiled.oaths[group]
+    end
 
     compiledCache[dialect] = compiled
     return compiled
@@ -389,80 +383,30 @@ local function ReplacePhrase(text, entry, Preserve, chance)
     return table.concat(out)
 end
 
-local function StartsWithGreeting(text)
-    local first = text:match("^%s*([%a']+)")
-    if not first then return false end
-    if GREETING_WORDS[first:lower()] then return true end
-    -- A leading interjection: "Wow!", "Really?", "Well, ..."
-    return text:match("^%s*[%a']+[!%?,]") ~= nil
-end
-
--- Prepends an opener, unless the line already opens like a greeting or an exclamation, or
--- starts with a masked block (an emote, OOC text or an unresolved {token})
-local function ApplyOpener(text, compiled, intensity, force)
-    if #compiled.openers == 0 then return text end
-    if not force and math.random() >= FlourishChance(OPENER_CHANCE, intensity) then return text end
-    if text:find("^%s*" .. MARK_OPEN) or StartsWithGreeting(text) then return text end
-
-    local opener = PickAvoiding("opener", compiled.openers, FRAGMENT_HISTORY_AVOID)
-    if not opener then return text end
-    opener = opener:gsub("%s+$", "")
-    if opener:match("%w$") then opener = opener .. "," end
-
-    text = text:gsub("^%s+", "")
-    -- After a comma the line carries on, so a leading "The" or "You" reads better in lower case
-    if opener:match("[,;:]$") then
-        local first = text:match("^([%a']+)")
-        if first and DECAPITALIZE[first:lower()] and first:sub(1, 1):match("%u") and not first:match("^%u%u") then
-            text = first:sub(1, 1):lower() .. text:sub(2)
-        end
+-- Puts an oath in front of the line, as its own sentence, when the engine says the moment
+-- fits (State.OathMoment). Skipped when the line starts with a masked block (an emote, OOC
+-- text, a {token}) or already opens with an exclamation ("Ha! ...", "Oi! ...").
+local function ApplyOath(text, compiled, moment, intensity)
+    local chance = OATH_CHANCE[moment]
+    local pool = compiled.oaths[OATH_GROUP[moment] or ""]
+    if not chance or not pool or #pool == 0 then return text end
+    local tier = math.min(intensity, 3)
+    if math.random() >= FlourishChance({ [tier] = chance * (OATH_INTENSITY_SCALE[tier] or 1) }, tier) then
+        return text
     end
-    return opener .. " " .. text
-end
+    if text:find("^%s*" .. MARK_OPEN) or text:find("^%s*[%a']+[!%?]") then return text end
 
--- Appends a closer to the masked text; returns nil when the line should not take one
-local function AppendCloser(text, closer)
-    -- Never tack an in-character closer onto a trailing OOC/emote/link block
-    if text:find(MARK_CLOSE .. "%s*$") then return nil end
-    -- Or onto a line that already trails off or ends in several marks ("...", "?!", "!!")
-    if text:find("%.%.%.%s*$") or text:find("[%.!%?][%.!%?]+%s*$") then return nil end
-
-    local body, punctuation = text:match("^(.-)([%.!%?]*)%s*$")
-    if not body or not body:find("%a") then return nil end
-
-    local isQuestion = punctuation:find("?", 1, true) ~= nil
-
-    if closer:match("^[,;:%.!%?]") then
-        if isQuestion then
-            closer = closer:gsub("[%.!%?]+$", "") .. "?"
-        end
-        return body .. closer
-    end
-
-    return body .. punctuation .. " " .. closer
-end
-
-local function ApplyCloser(text, compiled, intensity, force)
-    if #compiled.closers == 0 then return text end
-    if not force and math.random() >= FlourishChance(CLOSER_CHANCE, intensity) then return text end
-    local closer = PickAvoiding("closer", compiled.closers, FRAGMENT_HISTORY_AVOID)
-    return closer and AppendCloser(text, closer) or text
-end
-
--- Drops a racial interjection in after the first comma of a longer line ("I think, aye, we go")
-local function ApplyInterjection(text, compiled, intensity)
-    if #compiled.interjections == 0 then return text end
-    if math.random() >= FlourishChance(INTERJECTION_CHANCE, intensity) then return text end
-
-    local words = 0
-    for _ in text:gmatch("%a+") do words = words + 1 end
-    if words < 6 then return text end
-
-    local head, tail = text:match("^(.-%a),%s+(%a.*)$")
-    if not head then return text end
-    local interjection = PickAvoiding("interjection", compiled.interjections, FRAGMENT_HISTORY_AVOID)
-    if not interjection then return text end
-    return head .. ", " .. interjection .. ", " .. tail
+    local oath = PickAvoiding("oath", pool, FRAGMENT_HISTORY_AVOID)
+    if not oath then return text end
+    oath = oath:gsub("^%s+", ""):gsub("%s+$", "")
+    if not oath:find("[%.!%?]$") then oath = oath .. "!" end
+    -- Don't say the same thing twice ("By Magni's beard! By Magni's beard, ...")
+    local core = oath:gsub("[%.!%?]+$", ""):lower()
+    if text:lower():find(core, 1, true) then return text end
+    -- A shout (battle cry) gets a shouted oath
+    local plain = text:gsub(MARK_OPEN .. "%d+" .. MARK_CLOSE, "")
+    if plain:find("%u%u") and not plain:find("%l") then oath = oath:upper() end
+    return oath .. " " .. text:gsub("^%s+", "")
 end
 
 ---------------------------------------------------------------------------
@@ -481,8 +425,7 @@ function Translator:HasDialect()
     if not dialect then return false end
     local compiled = CompileDialect(dialect)
     return next(compiled.words) ~= nil or #compiled.phrases > 0 or #compiled.contractions > 0
-        or #compiled.phonetics > 0 or #compiled.openers > 0 or #compiled.closers > 0
-        or #compiled.interjections > 0
+        or #compiled.phonetics > 0 or compiled.oathCount > 0
 end
 
 -- Noun / verb guard for word swaps. Swaps don't know grammar, so a few ambiguous words only
@@ -550,6 +493,145 @@ local function PreserveProperNouns(text, preserve)
     end))
 end
 
+-- A title in front of a name stays with it ("Lady Jaina", "Captain Grayson"), even at the
+-- start of a sentence
+local TITLES = {}
+for word in ("lord lady king queen prince princess sir captain commander general marshal warchief "
+    .. "archmage magistrate baron baroness high elder"):gmatch("%S+") do
+    TITLES[word] = true
+end
+local function PreserveTitles(text, preserve)
+    return (text:gsub("%f[%a](%u%l+)(%s+)(%u[%a']*)", function(title, space, name)
+        if not TITLES[title:lower()] then return nil end
+        return preserve(title .. space .. name)
+    end))
+end
+
+-- Words Never Translated (My Voice tab, /mono keep): matched in any letter case, whole words
+-- only (multi-word entries allowed)
+local function PreserveKeepWords(text, preserve)
+    local list = MonologueDB and MonologueDB.keepWords
+    if type(list) ~= "table" then return text end
+    for _, entry in ipairs(list) do
+        if type(entry) == "string" and entry:find("%w") then
+            local pattern = entry:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+                :gsub("%a", function(c) return "[" .. c:lower() .. c:upper() .. "]" end)
+            text = text:gsub("%f[%w']" .. pattern .. "%f[^%w']", preserve)
+        end
+    end
+    return text
+end
+
+-- Gender-aware swaps. Only words used to address someone ("friend" -> "lad") take a gender,
+-- and only the one the line itself gives (see PronounGender); the pairs map the male form to
+-- the female form.
+local ADDRESS_WORDS = {
+    friend = true, friends = true, buddy = true, pal = true, mate = true, man = true,
+    dude = true, guy = true, bro = true, sir = true,
+}
+local GENDER_PAIRS = {
+    lad = "lass", laddie = "lassie", lads = "lasses", boyo = "lass", brother = "sister",
+    brothers = "sisters", sir = "madam", fella = "lass", ["my man"] = "my lady",
+    ["old boy"] = "old girl",
+}
+-- Female -> male, fixed (several male forms share "lass", so the reverse can't be derived)
+local GENDER_REVERSE = {
+    lass = "lad", lassie = "laddie", lasses = "lads", sister = "brother", sisters = "brothers",
+    madam = "sir", ["my lady"] = "my man", ["old girl"] = "old boy",
+}
+
+-- The gender the line itself gives, from the words the player used: 3 = female ("she",
+-- "her", "lady"...), 2 = male ("he", "him", "sir"...), nil = none or both. Who you're
+-- targeting is never used: you may not be talking about them.
+local FEMALE_CUES, MALE_CUES = {}, {}
+for word in ("she her hers herself woman women girl girls lady ladies lass lassie lasses sister "
+    .. "sisters madam ma'am"):gmatch("%S+") do FEMALE_CUES[word] = true end
+for word in ("he him his himself man men boy boys lad laddie lads brother brothers sir fella "
+    .. "guy dude bro"):gmatch("%S+") do MALE_CUES[word] = true end
+local function PronounGender(text)
+    local female, male = false, false
+    for word in text:lower():gmatch("[%a']+") do
+        if FEMALE_CUES[word] then female = true end
+        if MALE_CUES[word] then male = true end
+    end
+    if female and not male then return 3 end
+    if male and not female then return 2 end
+    return nil
+end
+
+-- The variants of an address word that fit the addressee: mapped to her or his form, or,
+-- when unknown, only the ungendered ones (if there are any)
+local function GenderedVariants(entry, gender, extraPairs)
+    local toFemale, toMale = {}, {}
+    for male, female in pairs(GENDER_PAIRS) do toFemale[male] = female end
+    for female, male in pairs(GENDER_REVERSE) do toMale[female] = male end
+    if type(extraPairs) == "table" then
+        for male, female in pairs(extraPairs) do
+            if type(male) == "string" and type(female) == "string" then
+                toFemale[male:lower()] = female:lower()
+                toMale[female:lower()] = toMale[female:lower()] or male:lower()
+            end
+        end
+    end
+    local out, seen = {}, {}
+    local function add(v) if not seen[v] then seen[v] = true; out[#out + 1] = v end end
+    if gender == 3 or gender == 2 then
+        local map = (gender == 3) and toFemale or toMale
+        for _, v in ipairs(entry.variants) do add(map[v:lower()] or v) end
+    else
+        for _, v in ipairs(entry.variants) do
+            if not toFemale[v:lower()] and not toMale[v:lower()] then add(v) end
+        end
+        if #out == 0 then return entry.variants end
+    end
+    return out
+end
+
+-- Speech effects from your state (General tab): slurred when drunk (level 1-3), shaky when
+-- badly hurt. Runs on the masked text, so names, links and OOC parts are never touched.
+local VOWEL_STRETCH = { a = "aa", e = "ee", o = "oo", u = "uu" }
+local function ApplySpeechEffects(text)
+    local engine = MonologueEngine
+    if not (engine and engine.GetSpeechState) then return text end
+    local ok, state = pcall(engine.GetSpeechState, engine)
+    if not ok or type(state) ~= "table" then return text end
+
+    local drunk = tonumber(state.drunk) or 0
+    if drunk > 0 then
+        local slur = ({ 0.25, 0.5, 0.8 })[math.min(drunk, 3)]
+        local stretched = false
+        text = text:gsub("%a[%a']*", function(word)
+            if math.random() >= slur then return nil end
+            -- "s" inside or at the end of a word slurs to "sh" ("this" -> "thish")
+            local tail = word:sub(2):gsub("ss", "s"):gsub("s([^hH])", "sh%1"):gsub("s$", "sh")
+            local out = word:sub(1, 1) .. tail
+            if not stretched and drunk >= 2 and #out >= 3 and math.random() < 0.25 then
+                local vowel = out:match("[aeou]")
+                if vowel then
+                    out = out:gsub(vowel, VOWEL_STRETCH[vowel], 1)
+                    stretched = true
+                end
+            end
+            return out
+        end)
+        if drunk >= 2 and math.random() < 0.15 * drunk then
+            text = text:gsub("%s*$", "") .. " *hic*"
+        end
+    end
+
+    if state.hurt and math.random() < 0.4 then
+        -- A stammer on the first word: "I-I", "W-we"
+        text = text:gsub("^(%s*)(%a)(%a*)", function(space, first, rest)
+            if rest == "" then return space .. first .. "-" .. first end
+            -- A shout stays a shout ("F-FOR IRONFORGE!"), a normal word goes "W-we"
+            local repeated = (rest:find("%l") or not first:find("%u")) and first:lower() or first
+            return space .. first .. "-" .. repeated .. rest
+        end, 1)
+        if math.random() < 0.5 and not text:find("%.%.%s*$") then text = text:gsub("%.%s*$", "...") end
+    end
+    return text
+end
+
 function Translator:Translate(text, intensity, dialectOverride)
     if type(text) ~= "string" or text == "" then return text end
     intensity = math.floor(tonumber(intensity) or 0)
@@ -578,6 +660,8 @@ function Translator:Translate(text, intensity, dialectOverride)
     -- Names stay as written: your guild's name anywhere in the line, and any capitalised word
     -- in the middle of a sentence ("Clan BattleHammer", "Ironforge", "Magni")
     text = PreserveGuildName(text, Preserve)
+    text = PreserveKeepWords(text, Preserve)
+    text = PreserveTitles(text, Preserve)
     text = PreserveProperNouns(text, Preserve)
 
     -- Nothing in-character left to translate
@@ -588,7 +672,7 @@ function Translator:Translate(text, intensity, dialectOverride)
         text = ReplacePhrase(text, phrase, Preserve, nil)
     end
 
-    -- Light Flavor (Dialect Strength): vocabulary and openers/closers only
+    -- Light Flavor (Dialect Strength): vocabulary only (and fewer oaths)
     local lightFlavor = self:GetDialectStrength() == "LIGHT"
 
     -- Layer flavor (Variety Engine): about 30% of lines carry the cadence and vocabulary of
@@ -629,6 +713,8 @@ function Translator:Translate(text, intensity, dialectOverride)
     local useSwaps = next(compiled.words) ~= nil
     local usePhonetics = #compiled.phonetics > 0 and not lightFlavor
 
+    local addresseeGender = PronounGender(original)
+
     if useSwaps or usePhonetics then
         local source = text
         local previousWord
@@ -639,7 +725,12 @@ function Translator:Translate(text, intensity, dialectOverride)
             previousWord = lowered
 
             local function Swapped(entry, original_word)
-                local replacement = MatchCase(original_word, PickVariant(entry))
+                local choice
+                if ADDRESS_WORDS[entry.key] then
+                    local list = GenderedVariants(entry, addresseeGender, dialect.genderPairs)
+                    choice = PickAvoiding("swap:" .. entry.key .. ":" .. tostring(addresseeGender), list, VARIANT_HISTORY_AVOID)
+                end
+                local replacement = MatchCase(original_word, choice or PickVariant(entry))
                 -- No doubled punctuation: "run!" -> "flee." + "!" keeps just the "!"
                 if following:match("[%.!%?]") then
                     replacement = replacement:gsub("[%.!%?]+$", "")
@@ -683,48 +774,20 @@ function Translator:Translate(text, intensity, dialectOverride)
         text = text:gsub(MARK_SWAPPED, "")
     end
 
+    if MonologueDB and MonologueDB.speechEffects ~= false then
+        text = ApplySpeechEffects(text)
+    end
+
     local translated = RestoreBlocks(text, preserved)
 
-    -- Cadence and flourishes: interjection, opener and closer (Standard: now and then, at
-    -- most one of opener/closer per line; Unhinged: often, both allowed). A shout in capitals
-    -- (battle cries) never takes an opener or closer.
-    -- Light Flavor keeps openers/closers at the Standard rate, but no interjections.
-    -- A "bare" line (a short reaction: situation, identity, idle, party) takes no opener,
-    -- closer or interjection: "Here's how it goes, the elementals..." reads wrong.
-    local bare = MonologueEngine and MonologueEngine.State and MonologueEngine.State.BareLine
+    -- Oath: only in a moment the engine marked (greeting, kill, low health, battle cry), never
+    -- on typed chat. An oath is its own sentence, so it is safe on bare reaction lines too.
+    local moment = MonologueEngine and MonologueEngine.State and MonologueEngine.State.OathMoment
     local decorated = text
-    local flourishLevel = lightFlavor and 2 or intensity
-    if not lightFlavor and not bare then decorated = ApplyInterjection(decorated, compiled, intensity) end
-    local plain = text:gsub(MARK_OPEN .. "%d+" .. MARK_CLOSE, "")
-    local isShout = (plain:find("%u%u") and not plain:find("%l")) or bare
-    -- A layer's own opener or closer replaces the race's for this line
-    local flavorDone = false
-    if flavor and not isShout then
-        local lists = { openers = flavor.openers or {}, closers = flavor.closers or {} }
-        local before = decorated
-        if #lists.openers > 0 and (#lists.closers == 0 or math.random() < 0.5) then
-            decorated = ApplyOpener(decorated, lists, flourishLevel, true)
-        elseif #lists.closers > 0 then
-            decorated = ApplyCloser(decorated, lists, flourishLevel, true)
-        end
-        flavorDone = decorated ~= before
-        if flavorDone and MonologueEngine and MonologueEngine.Debug then
-            MonologueEngine:Debug("flourish: layer flavor added")
-        end
-    end
-    if not isShout and not flavorDone then
-        local beforeOpener = decorated
-        decorated = ApplyOpener(decorated, compiled, flourishLevel)
-        local gotOpener = decorated ~= beforeOpener
-        if not (gotOpener and flourishLevel < 3) then
-            local beforeCloser = decorated
-            decorated = ApplyCloser(decorated, compiled, flourishLevel)
-            if decorated ~= beforeCloser and MonologueEngine and MonologueEngine.Debug then
-                MonologueEngine:Debug("flourish: closer added")
-            end
-        end
-        if gotOpener and MonologueEngine and MonologueEngine.Debug then
-            MonologueEngine:Debug("flourish: opener added")
+    if moment then
+        decorated = ApplyOath(text, compiled, moment, lightFlavor and 1 or intensity)
+        if decorated ~= text and MonologueEngine.Debug then
+            MonologueEngine:Debug("flourish: oath added (" .. tostring(moment) .. ")")
         end
     end
     if decorated ~= text then
@@ -745,8 +808,8 @@ end
 -- Effective intensity for a chat channel, honouring auto-stepdown rules
 -- Per-character Dialect Strength (My Voice tab, CustomVoice.dialectStrength):
 --   "FULL"  (default) follows the General tab intensity,
---   "LIGHT" keeps vocabulary swaps and the race's openers/closers, skips phonetic respelling,
---           contractions and interjections,
+--   "LIGHT" keeps vocabulary swaps (and fewer oaths), skips phonetic respelling and
+--           contractions,
 --   "CLEAN" no translation at all (clans, allegiances, upbringing and the rest still apply).
 function Translator:GetDialectStrength()
     local cv = MonologueCharDB and MonologueCharDB.CustomVoice
@@ -859,16 +922,22 @@ function Translator:ProcessEditBox(editBox)
 
     local chatType = editBox:GetAttribute("chatType")
     local intensity = self:GetChannelIntensity(chatType)
+    -- The preview (if any) belongs to this text only
+    local preview = boxState.preview
+    boxState.preview = nil
     if intensity <= 0 then
         return Result(MonologueDB.translationIntensity > 0 and "channel bypassed or untranslated" or "intensity Off", chatType)
     end
 
-    if MonologueRPBridge and MonologueRPBridge.IsPlayerIC then
-        local ok, isIC = pcall(MonologueRPBridge.IsPlayerIC, MonologueRPBridge)
-        if ok and isIC == false then return Result("out of character", chatType) end
-    end
+    if self:IsOutOfCharacter() then return Result("out of character", chatType) end
 
-    local ok, translated = pcall(self.Translate, self, text, intensity)
+    -- What you saw in the preview is what is sent (translation has random variants)
+    local ok, translated
+    if preview and preview.source == text and preview.chatType == chatType and preview.intensity == intensity then
+        ok, translated = true, preview.output
+    else
+        ok, translated = pcall(self.Translate, self, text, intensity)
+    end
     if not ok then return Result("translator error", chatType) end
     if type(translated) ~= "string" or translated == text then
         return Result(self:HasDialect() and "nothing to translate" or "no dialect loaded", chatType)
@@ -879,6 +948,92 @@ function Translator:ProcessEditBox(editBox)
     boxState.lastOutput = translated
     self.Stats.translated = self.Stats.translated + 1
     return Result("translated", chatType)
+end
+
+-- Out of character: the Monologue keybind or /mono ooc, or Total RP 3 set to OOC
+function Translator:IsOutOfCharacter()
+    if MonologueDB and MonologueDB.outOfCharacter then return true end
+    if MonologueRPBridge and MonologueRPBridge.IsPlayerIC then
+        local ok, isIC = pcall(MonologueRPBridge.IsPlayerIC, MonologueRPBridge)
+        if ok and isIC == false then return true end
+    end
+    return false
+end
+
+---------------------------------------------------------------------------
+-- Live preview: while you type, a line just above the chat box shows how your message will
+-- come out. The preview is kept, and sent as shown if you send that exact text.
+---------------------------------------------------------------------------
+
+local PREVIEW_DELAY = 0.15
+local previewFrame, previewText, previewOwner
+
+local function HidePreview(editBox)
+    if previewFrame and (editBox == nil or previewOwner == editBox) then
+        previewFrame:Hide()
+        previewOwner = nil
+    end
+end
+
+local function EnsurePreviewFrame()
+    if previewFrame then return end
+    previewFrame = CreateFrame("Frame", "MonologueChatPreview", UIParent)
+    previewFrame:SetFrameStrata("DIALOG")
+    previewFrame:Hide()
+    local bg = previewFrame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.65)
+    previewText = previewFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    previewText:SetPoint("TOPLEFT", 6, -3)
+    previewText:SetPoint("TOPRIGHT", -6, -3)
+    previewText:SetJustifyH("LEFT")
+    previewText:SetWordWrap(true)
+end
+
+function Translator:UpdatePreview(editBox)
+    local boxState = BoxState(editBox)
+    local function off()
+        boxState.preview = nil
+        HidePreview(editBox)
+    end
+    if not MonologueDB or not MonologueDB.enabled or MonologueDB.chatPreview == false then return off() end
+    if not (editBox:IsShown() and editBox:HasFocus()) then return off() end
+
+    local text = editBox:GetText()
+    if type(text) ~= "string" or text == "" or text:sub(1, 1) == "/" then return off() end
+    local chatType = editBox:GetAttribute("chatType")
+    local intensity = self:GetChannelIntensity(chatType)
+    if intensity <= 0 or self:IsOutOfCharacter() then return off() end
+
+    local ok, translated = pcall(self.Translate, self, text, intensity)
+    if not ok or type(translated) ~= "string" or translated == text or #translated > MAX_CHAT_BYTES then
+        return off()
+    end
+    boxState.preview = { source = text, chatType = chatType, intensity = intensity, output = translated }
+
+    EnsurePreviewFrame()
+    previewOwner = editBox
+    previewFrame:ClearAllPoints()
+    previewFrame:SetPoint("BOTTOMLEFT", editBox, "TOPLEFT", 0, 2)
+    previewFrame:SetPoint("BOTTOMRIGHT", editBox, "TOPRIGHT", 0, 2)
+    previewText:SetText("|cff00ccff>|r |cffd8d8d8" .. translated .. "|r")
+    previewFrame:SetHeight(math.max(14, (previewText:GetStringHeight() or 12) + 6))
+    previewFrame:Show()
+end
+
+local function OnPreviewTextChanged(editBox)
+    local boxState = BoxState(editBox)
+    if boxState.previewPending then return end
+    boxState.previewPending = true
+    C_Timer.After(PREVIEW_DELAY, function()
+        boxState.previewPending = nil
+        pcall(Translator.UpdatePreview, Translator, editBox)
+    end)
+end
+
+local function OnPreviewHide(editBox)
+    BoxState(editBox).preview = nil
+    HidePreview(editBox)
 end
 
 local function OnParseText(editBox, send)
@@ -894,10 +1049,17 @@ local function TryHook(owner, key)
 end
 
 local function HookEditBox(editBox)
-    if not editBox or BoxState(editBox).hooked then return end
-    if TryHook(editBox, "ParseText") then
-        BoxState(editBox).hooked = true
+    if not editBox then return end
+    local state = BoxState(editBox)
+    if not state.hooked and TryHook(editBox, "ParseText") then
+        state.hooked = true
         Translator.Hooks.editBoxes = Translator.Hooks.editBoxes + 1
+    end
+    -- Live preview (HookScript adds to the box's scripts; nothing on the box is replaced)
+    if not state.previewHooked and editBox.HookScript then
+        state.previewHooked = pcall(editBox.HookScript, editBox, "OnTextChanged", OnPreviewTextChanged)
+            and pcall(editBox.HookScript, editBox, "OnHide", OnPreviewHide)
+            and pcall(editBox.HookScript, editBox, "OnEditFocusLost", OnPreviewHide)
     end
 end
 

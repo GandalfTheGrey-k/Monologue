@@ -53,26 +53,12 @@ MonologueEngine.Data.Races["Human"] = {
             ["^gonna$"] = "going to",
             ["^wanna$"] = "want to",
         },
-        interjections = { "mark you", "truly", "I say", "by the Light" },
-        openers = {
-            "Well met,",
-            "By the Light,",
-            "Hear me,",
-            "Mark this,",
-            "In Stormwind's name,",
-            "Friend,",
-            "Listen well,",
-            "Truly,",
-        },
-        closers = {
-            ", by the Light.",
-            ", for the Alliance!",
-            ", so say I.",
-            ", in Stormwind's name.",
-            ", mark my words.",
-            ", good sir.",
-            ", and that's the truth.",
-            ", Light willing.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Well met!", "Good day!", "Hail!", "Light be with you!" },
+            Fight = { "By the Light!", "For Stormwind!", "Have at you!", "For the Alliance!", "Ha!" },
+            Hurt = { "Light preserve me!", "Blast!", "Light, give me strength!", "Not today!", "Hold together!" },
         },
     },
     GuildGreetings = {
@@ -165,29 +151,13 @@ MonologueEngine.Data.Races["Human"] = {
             "No more running, {target}. For Stormwind!",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         NobleOfStormwind = {
             name = "Noble of Stormwind",
             blurb = "Courtly and proper, a Stormwind noble with a taste for ceremony.",
             dialectIntensity = 0,
-            openers = {
-                "By the Light and the Crown,",
-                "Do attend,",
-                "If I may,",
-                "With the King's favor,",
-                "Most assuredly,",
-                "In good company,",
-            },
-            closers = {
-                ", if you please.",
-                ", as befits Stormwind.",
-                ", with respect.",
-                ", by the Crown.",
-                ", and so it is.",
-                ", most civilly.",
-            },
             FriendGreetings = {
                 Default = {
                     "Good day, {target}. Stormwind is the brighter for your presence.",
@@ -205,22 +175,6 @@ MonologueEngine.Data.Races["Human"] = {
             name = "Weathered Soldier",
             blurb = "Dry, tired and loyal: a veteran of the Second War who has seen enough.",
             dialectIntensity = 0,
-            openers = {
-                "Right,",
-                "Look,",
-                "Here's the thing,",
-                "Straight talk,",
-                "Let's be clear,",
-                "Keep your head down,",
-            },
-            closers = {
-                ", that's all there is to it.",
-                ", and don't argue.",
-                ", get on with it.",
-                ", trust me on that.",
-                ", I've seen worse.",
-                ", that's the long and short.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. Good to see you in one piece.",
@@ -238,22 +192,6 @@ MonologueEngine.Data.Races["Human"] = {
             name = "Westfall Farmhand",
             blurb = "Cheerful, plain-spoken and hardworking, with dirt under the nails.",
             dialectIntensity = 1,
-            openers = {
-                "Well, I'll be,",
-                "Shucks,",
-                "Say now,",
-                "Right neighborly of you,",
-                "Gosh,",
-                "I reckon,",
-            },
-            closers = {
-                ", and that's a fact.",
-                ", or so they say.",
-                ", honest as the harvest.",
-                ", by my reckoning.",
-                ", good as gold.",
-                ", plain and simple.",
-            },
             FriendGreetings = {
                 Default = {
                     "Well howdy, {target}! Come sit a while!",

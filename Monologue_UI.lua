@@ -22,8 +22,8 @@ local DROPDOWN_WIDTH = 220
 local INTENSITY_OPTIONS = {
     { value = 0, text = "Off" },
     { value = 1, text = "Light (vocabulary)" },
-    { value = 2, text = "Standard (+ accent, some openers/closers)" },
-    { value = 3, text = "Unhinged (+ frequent openers/closers)" },
+    { value = 2, text = "Standard (+ accent, the odd oath)" },
+    { value = 3, text = "Unhinged (+ more oaths)" },
 }
 
 -- The dialog-box background texture is see-through; a near-opaque dark layer underneath
@@ -381,6 +381,30 @@ function UI:CreatePanel()
         controls.channels[#controls.channels + 1] = cb
     end
 
+    -- Live preview and speech effects (MonologueDB.chatPreview / speechEffects)
+    controls.preview = CreateCheckbox(f, "Preview above the chat box", -608,
+        function() return MonologueDB.chatPreview ~= false end,
+        function(value) MonologueDB.chatPreview = value and true or false end)
+    controls.preview:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Translation preview", 1, 0.82, 0)
+        GameTooltip:AddLine("While you type, a line just above the chat box shows how your message will come out. What you see is what is sent.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    controls.preview:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    controls.effects = CreateCheckbox(f, "Speech effects", -608,
+        function() return MonologueDB.speechEffects ~= false end,
+        function(value) MonologueDB.speechEffects = value and true or false end)
+    controls.effects:ClearAllPoints()
+    controls.effects:SetPoint("TOPLEFT", LEFT + 212, -608)
+    controls.effects:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Speech effects", 1, 0.82, 0)
+        GameTooltip:AddLine("Your words slur when you're drunk (tipsy, drunk, smashed) and shake when you're badly hurt in a fight. Applies to your typed chat and your character's lines.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    controls.effects:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     -----------------------------------------------------------------------
     -- Footer: active profile status + close
     -----------------------------------------------------------------------
@@ -422,6 +446,8 @@ function UI:Refresh()
     controls.openWorld:Refresh()
     controls.debug:Refresh()
     controls.strict:Refresh()
+    controls.preview:Refresh()
+    controls.effects:Refresh()
     for _, cb in ipairs(controls.channels) do cb:Refresh() end
 
     local context = MonologueEngine.ActiveContext or {}
@@ -773,13 +799,16 @@ function UI:CreateLinesPanel()
     l.emotes = Box(nil, "Reply when players emote at me (/wave, /bow, /cheer...)", LEFT - 4, -490, function(self)
         MonologueDB.emoteReplies = self:GetChecked() and true or false
     end)
+    l.moments = Box(nil, "Everyday moments (eating, mounting, resting, an ally falling)", LEFT - 4, -514, function(self)
+        MonologueDB.momentLines = self:GetChecked() and true or false
+    end)
     Hint("Battle Cry shouts a line. Greet says hello to your target, and glows when a greeting or emote reply "
-        .. "is waiting. Right-drag to move. Keybinds: Key Bindings > AddOns > Monologue.", -518)
+        .. "is waiting. Right-drag to move. Keybinds (also in/out of character): Key Bindings > AddOns > Monologue.", -542)
 
     -- Live status
-    CreateSectionHeader(f, "Right Now", -550)
+    CreateSectionHeader(f, "Right Now", -574)
     l.status = CreateLabel(f, "", "GameFontHighlightSmall")
-    l.status:SetPoint("TOPLEFT", LEFT, -568)
+    l.status:SetPoint("TOPLEFT", LEFT, -592)
     l.status:SetWidth(width - 110)
     l.status:SetWordWrap(true)
     l.status:SetJustifyV("TOP")
@@ -810,6 +839,7 @@ function UI:RefreshLines(skipSliders)
     l.cry:SetChecked(MonologueDB.buttonShown and true or false)
     l.greet:SetChecked(MonologueDB.greetButtonShown and true or false)
     l.emotes:SetChecked(MonologueDB.emoteReplies and true or false)
+    l.moments:SetChecked(MonologueDB.momentLines ~= false)
     if not skipSliders then
         l.pullSlider.Refresh()
         l.gapSlider.Refresh()
@@ -854,7 +884,7 @@ end
 ---------------------------------------------------------------------------
 
 StaticPopupDialogs["MONOLOGUE_RESET_VOICE"] = {
-    text = "Reset ALL My Voice customizations for this character? Openers, closers, swaps, battle cries, persona and guild greeting will be cleared.",
+    text = "Reset ALL My Voice customizations for this character? Oaths, swaps, battle cries, persona and guild greeting will be cleared.",
     button1 = YES,
     button2 = NO,
     OnAccept = function() MonologueEngine:ResetCustomVoice() end,
@@ -1171,17 +1201,26 @@ function UI:CreateVoicePanel()
         MonologueEngine:CustomVoiceSetStance(v.stanceRace, v.stanceValue)
     end)
 
-    -- Openers & closers
-    v.hLines = Header("Custom Openers & Closers")
-    v.lineHint = Note("|cff888888Added to your race/class pool and used now and then at Standard intensity, often at Unhinged. Example: By my blade, / , or so I swore.|r")
+    -- Oaths
+    v.hLines = Header("My Oaths")
+    v.lineHint = Note("|cff888888Short exclamations said now and then before a greeting, a kill line, a low-health line or a battle cry. Added to your race's own. Example: By my blade!|r")
     v.lineInput = CreateInput(content, 250)
     local function AddLine(listKey)
         local text = v.lineInput:GetText()
         if Report(MonologueEngine:CustomVoiceAddLine(listKey, text)) then v.lineInput:SetText("") end
     end
-    v.addOpener = CreateButton(content, "Add Opener", 80, function() AddLine("openers") end)
-    v.addCloser = CreateButton(content, "Add Closer", 80, function() AddLine("closers") end)
-    v.lineInput:SetScript("OnEnterPressed", function() AddLine("openers") end)
+    v.addOpener = CreateButton(content, "Add Oath", 80, function() AddLine("oaths") end)
+    v.lineInput:SetScript("OnEnterPressed", function() AddLine("oaths") end)
+
+    -- Words Never Translated (MonologueDB.keepWords, all characters)
+    v.hKeep = Header("Words Never Translated")
+    v.keepHint = Note("|cff888888Names and words the accent never touches, in any letter case (all your characters). Names with a capital letter mid-sentence are already kept. Example: battlehammer|r")
+    v.keepInput = CreateInput(content, 250, 40)
+    local function AddKeep()
+        if Report(MonologueEngine:AddKeepWord(v.keepInput:GetText())) then v.keepInput:SetText("") end
+    end
+    v.addKeep = CreateButton(content, "Add Word", 80, AddKeep)
+    v.keepInput:SetScript("OnEnterPressed", AddKeep)
 
     -- Swaps
     v.hSwaps = Header("Custom Word & Phrase Swaps")
@@ -1385,7 +1424,7 @@ function UI:LayoutVoice()
     y = y + 4
     at(v.strengthLabel, 4, 5); at(v.strengthDD, 130, 0); y = y + 30
     local strength = cv.dialectStrength or "FULL"
-    v.strengthNote:SetText("|cff888888" .. ((strength == "LIGHT" and "Light Flavor: key word swaps and your race's openers/closers, no accent respelling.")
+    v.strengthNote:SetText("|cff888888" .. ((strength == "LIGHT" and "Light Flavor: key word swaps and the odd oath, no accent respelling.")
         or (strength == "CLEAN" and "Clean: standard spelling. Your clan, allegiance, upbringing and the rest still shape what you say.")
         or "Full Dialect: the accent level from the General tab, with every respelling and swap.") .. "|r")
     noteAt(v.strengthNote)
@@ -1404,17 +1443,25 @@ function UI:LayoutVoice()
     end
     listRows(stanceEntries)
 
-    -- Openers & closers
+    -- Oaths
     at(v.hLines, 0); y = y + 22
     noteAt(v.lineHint)
-    at(v.lineInput, 10); after(v.addOpener, v.lineInput, 6); after(v.addCloser, v.addOpener, 4)
+    at(v.lineInput, 10); after(v.addOpener, v.lineInput, 6)
     y = y + 28
     local entries = {}
-    for i, text in ipairs(cv.openers) do
-        entries[#entries + 1] = { text = "|cff00ccffOpener|r  " .. text, remove = function() engine:CustomVoiceRemoveLine("openers", i, text) end }
+    for i, text in ipairs(cv.oaths) do
+        entries[#entries + 1] = { text = "|cff00ccffOath|r  " .. text, remove = function() engine:CustomVoiceRemoveLine("oaths", i, text) end }
     end
-    for i, text in ipairs(cv.closers) do
-        entries[#entries + 1] = { text = "|cff00ccffCloser|r  " .. text, remove = function() engine:CustomVoiceRemoveLine("closers", i, text) end }
+    listRows(entries)
+
+    -- Words Never Translated
+    at(v.hKeep, 0); y = y + 22
+    noteAt(v.keepHint)
+    at(v.keepInput, 10); after(v.addKeep, v.keepInput, 6)
+    y = y + 28
+    entries = {}
+    for _, word in ipairs(type(MonologueDB.keepWords) == "table" and MonologueDB.keepWords or {}) do
+        entries[#entries + 1] = { text = "|cff00ccffKeep|r  " .. word, remove = function() engine:RemoveKeepWord(word) end }
     end
     listRows(entries)
 
@@ -2266,6 +2313,7 @@ function UI:CreateMinimapButton()
     background:SetPoint("TOPLEFT", 7, -5)
 
     local icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon = icon
     icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
     icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
     icon:SetSize(17, 17)
@@ -2309,6 +2357,16 @@ function UI:CreateMinimapButton()
     PositionMinimapButton(button, angle)
     button:SetShown(MonologueDB.minimapShown ~= false)
     self.MinimapButton = button
+    self:UpdateMinimapState()
+end
+
+-- Out of character (keybind, /mono ooc): the book goes grey
+function UI:UpdateMinimapState()
+    local button = self.MinimapButton
+    if not button or not button.icon or not MonologueDB then return end
+    local ooc = MonologueDB.outOfCharacter == true
+    button.icon:SetDesaturated(ooc)
+    button.icon:SetVertexColor(ooc and 0.6 or 1, ooc and 0.6 or 1, ooc and 0.6 or 1)
 end
 
 -- Each piece is built on its own, so an error in one (e.g. a damaged saved position) can't

@@ -4,8 +4,8 @@
 
     PvPLines are the rival lines (the engine reads the key "PvPLines"). Tiers: FirstClash,
     DejaVu, Rematch, Vendetta, Dominance, Nemesis. Tokens: {target} = the rival, {zone} =
-    where you are, {lastzone} = where you last fought them, {opener}/{closer} = fragments
-    from _Core.lua.
+    where you are, {lastzone} = where you last fought them, {opener} = a fighting
+    oath.
 
     DuelWin / DuelLoss are spoken when a duel ends (/mono duels lists records). They are
     friendly tavern-brawl banter, kept apart from rivals.
@@ -97,7 +97,7 @@ MonologueEngine.Data.Profiles["WebbPage"].PvPLines = {
         "Again, {target}? Sigh.",
     },
     Nemesis = {
-        "{opener} {target}, we end this where it started: {lastzone}! {closer}",
+        "{opener} {target}, we end this where it started: {lastzone}!",
         "{target}. Every thorn in my side leads back to you.",
         "{target}! The garden demands your end!",
         "No more weeds, {target}!",

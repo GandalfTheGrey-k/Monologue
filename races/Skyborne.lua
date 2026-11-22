@@ -9,12 +9,12 @@
                    avoiding the last 3 used)
       phraseSwaps  common expressions -> idioms; applied before wordSwaps, longest first
       contractions formal cadence: "can't" -> "cannot", applied only part of the time
-      interjections, openers, closers  flourishes for Standard / Unhinged intensity
+      oaths        short exclamations (Greet / Fight / Hurt) said before a fitting line
 
     FactionSubtypes is keyed by the englishFaction string from UnitFactionGroup("player").
     The engine merges the matching subtype over the base race data. Inside a subtype the
     swap tables merge key by key (a subtype entry replaces the base entry for that key), and
-    lists (openers, closers, greetings, lines) replace the base list outright.
+    lists (oaths, greetings, lines) replace the base list outright.
     WoW Forever canon only.
 --]]
 
@@ -83,26 +83,12 @@ MonologueEngine.Data.Races["Skyborne"] = {
             ["^gonna$"] = "going to",
             ["^wanna$"] = "wish to",
         },
-        interjections = { "mark you", "by the winds", "truly", "so the wind says" },
-        openers = {
-            "By the winds,",
-            "Fair winds,",
-            "Mark the sky,",
-            "Listen to the wind,",
-            "Aloft and listening,",
-            "Beneath wide skies,",
-            "As the winds carry word,",
-            "Kindred,",
-        },
-        closers = {
-            ", on fair winds.",
-            ", beneath open skies.",
-            ", as the wind wills.",
-            ", so says the sky.",
-            ", the winds willing.",
-            ", wing and wind.",
-            ", as the horizon allows.",
-            ", so the winds are.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Fair winds!", "Well met!", "Winds be kind to you!", "Hail, friend!" },
+            Fight = { "By the winds!", "Ride the storm!", "Into the gale!", "For Zephras!", "Storm take you!" },
+            Hurt = { "Storm's teeth!", "Not yet!", "Steady, steady!", "I've weathered worse!", "The winds hold me!" },
         },
     },
     GuildGreetings = {
@@ -211,22 +197,6 @@ MonologueEngine.Data.Races["Skyborne"] = {
                     ["watch out"] = { "mind the wards", "beware the working" },
                     ["thank you"] = { "the Order thanks you", "my thanks, scholar" },
                 },
-                openers = {
-                    "By the Order,",
-                    "Mark my words,",
-                    "Study this,",
-                    "As the Order teaches,",
-                    "By the Order's lore,",
-                    "Consider carefully,",
-                },
-                closers = {
-                    ", so the Order teaches.",
-                    ", by the High Order's grace.",
-                    ", as the lore records.",
-                    ", as the scholars hold.",
-                    ", so the wards are woven.",
-                    ", knowledge endures.",
-                },
             },
             GuildGreetings = {
                 Standard = {
@@ -256,22 +226,6 @@ MonologueEngine.Data.Races["Skyborne"] = {
                     ["let's go"] = { "let the gale carry us", "with the wind" },
                     ["watch out"] = { "the gale turns", "mind the shifting wind" },
                 },
-                openers = {
-                    "By the shaped wind,",
-                    "Hear the gale,",
-                    "The wind speaks,",
-                    "Ride with me,",
-                    "As the gale turns,",
-                    "Shaper's word,",
-                },
-                closers = {
-                    ", the wind carries it.",
-                    ", shaped by the gale.",
-                    ", so the winds are bent.",
-                    ", as the shapers say.",
-                    ", the gale agrees.",
-                    ", on the shaped wind.",
-                },
             },
             GuildGreetings = {
                 Standard = {
@@ -288,29 +242,13 @@ MonologueEngine.Data.Races["Skyborne"] = {
             },
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         HighOrder = {
             name = "High Order Formal",
             blurb = "Precise and scholarly: the formal cadence of the High Order.",
             dialectIntensity = -1,
-            openers = {
-                "By the Order's lore,",
-                "Let it be recorded,",
-                "Attend,",
-                "With due consideration,",
-                "As the scholars hold,",
-                "In accordance with the Order,",
-            },
-            closers = {
-                ", as the lore records.",
-                ", so the Order teaches.",
-                ", with respect.",
-                ", by the High Order's grace.",
-                ", and so it is recorded.",
-                ", knowledge endures.",
-            },
             FriendGreetings = {
                 Default = {
                     "Well met, {target}. The Order is honored by your company.",
@@ -328,22 +266,6 @@ MonologueEngine.Data.Races["Skyborne"] = {
             name = "Windshaper Wanderer",
             blurb = "Free and shifting like the gale; a shaper of winds who owes nothing to walls.",
             dialectIntensity = 0,
-            openers = {
-                "The wind tells me,",
-                "Ride with me,",
-                "Hear the gale,",
-                "Shaper's word,",
-                "As the breeze turns,",
-                "Under open sky,",
-            },
-            closers = {
-                ", the gale agrees.",
-                ", wherever the wind goes.",
-                ", shaped by the breeze.",
-                ", and onward we ride.",
-                ", so the winds are bent.",
-                ", on the open air.",
-            },
             FriendGreetings = {
                 Default = {
                     "Fair winds, {target}! The gale carried you here.",
@@ -361,22 +283,6 @@ MonologueEngine.Data.Races["Skyborne"] = {
             name = "Storm-Chaser",
             blurb = "Bold and thrilling: chases the thunderhead and laughs at the lightning.",
             dialectIntensity = 1,
-            openers = {
-                "Hold fast,",
-                "Thunder's rolling,",
-                "Into the squall,",
-                "Catch the thunderhead,",
-                "Wings out,",
-                "By the lightning,",
-            },
-            closers = {
-                ", and the storm cheers!",
-                ", ride the thunder!",
-                ", the tempest is calling!",
-                ", wings wide!",
-                ", faster than the squall!",
-                ", lightning take the slow.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! The storm's rising; come fly with me!",

@@ -4,7 +4,7 @@
 
     Personas sit above race and class and below the character profile. Players pick one
     per growth stage (levels 1-19 / 20-49 / 50-60) in /mono ui. Any race/class/profile
-    key may be overridden here: Dialect, SpellReactions, PvPLines, GuildGreetings, Fragments.
+    key may be overridden here: Dialect, SpellReactions, PvPLines, GuildGreetings.
 
     displayName is optional and is the label shown in the config panel.
     Keys beginning with "_Template" are hidden from the panel.

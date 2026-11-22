@@ -110,26 +110,12 @@ MonologueEngine.Data.Races["Dwarf"] = {
             -- -ing -> -in' only. The th -> d shift belongs to Troll.lua alone.
             ["ing%f[%A]"] = "in'",
         },
-        interjections = { "aye", "mind ye", "so it is" },
-        openers = {
-            "By Magni's beard,",
-            "Aye,",
-            "Listen up,",
-            "Mark me words,",
-            "By the Great Forge,",
-            "Now then,",
-            "Hark,",
-            "Right then,",
-        },
-        closers = {
-            ", by Magni's beard!",
-            ", aye!",
-            ", mind yer feet.",
-            ", by the Great Forge!",
-            ", so it is, lad.",
-            ", an' that's the truth o' it.",
-            ", mark me words.",
-            ", an' that's that.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Ho there!", "Well met!", "Aye!", "Ha!", "By me beard!" },
+            Fight = { "By Magni's beard!", "Gol'kosh!", "By the Great Forge!", "Ha!", "Khaz Modan!", "Hammer an' anvil!" },
+            Hurt = { "Blast it!", "Me beard!", "Bah!", "Not yet, by the Forge!", "Curse it all!" },
         },
     },
     -- Speech pools follow VOICE_GUIDE.md. {target} = the other player; PvP lines also use
@@ -298,29 +284,13 @@ MonologueEngine.Data.Races["Dwarf"] = {
             "Stone doesn't bend, {target}.",
         },
     },
-    -- Racial Temperament presets (My Voice tab): each replaces openers/closers and the battle
+    -- Racial Temperament presets (My Voice tab): each may replace the oaths and the battle
     -- cry, adds friend greetings, and nudges the accent strength by -1..+1.
     Presets = {
         JovialTavern = {
             name = "Jovial Tavern-Keep",
             blurb = "Warm, loud and generous: ale, songs and a seat by the hearth.",
             dialectIntensity = 1,
-            openers = {
-                "Pull up a stool,",
-                "Ha, listen,",
-                "Between you an' me,",
-                "Now here's a thing,",
-                "Fill yer cup,",
-                "Funny you should ask,",
-            },
-            closers = {
-                ", an' the next round's on me.",
-                ", pass the jug.",
-                ", ha!",
-                ", or so the barkeep swears.",
-                ", cheers to that.",
-                ", mind the foam.",
-            },
             FriendGreetings = {
                 Default = {
                     "There's me favourite customer. Sit, sit.",
@@ -332,32 +302,18 @@ MonologueEngine.Data.Races["Dwarf"] = {
                 },
             },
             BattleCry = {
-                "LAST CALL FOR THE LOT O' YE!",
-                "TANKARDS UP, AXES OUT!",
-                "FOR THE HEARTH AN' THE BARREL!",
-                "DRINKS AFTER! IF YE LIVE!",
+                "FOR IRONFORGE AN' THUNDERBREW!",
+                "TO THE LAST TANKARD!",
+                "AXES OUT, LADS! INTO 'EM!",
+                "KHAZ MODAN! AN' A ROUND AFTER!",
+                "FOR KHARANOS!",
+                "BRAWL'S ON! AT 'EM!",
             },
         },
         IronVeteran = {
             name = "Grumpy Iron-Vet",
             blurb = "Clipped, gruff and battle-worn: Khaz Modan has taken its toll.",
             dialectIntensity = 0,
-            openers = {
-                "Listen close,",
-                "Hmph,",
-                "Mark it,",
-                "I've seen this before,",
-                "Plain an' simple,",
-                "Here's how it goes,",
-            },
-            closers = {
-                ", an' that's an order.",
-                ", don't make me say it twice.",
-                ", hmph.",
-                ", keep yer guard up.",
-                ", now move.",
-                ", end of story.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. Still standin'. Good.",
@@ -370,31 +326,17 @@ MonologueEngine.Data.Races["Dwarf"] = {
             },
             BattleCry = {
                 "HOLD THE LINE!",
+                "SHIELDS! LOCK SHIELDS!",
+                "IRONFORGE HOLDS!",
                 "NOT ONE STEP BACK!",
-                "STONE AN' STEEL!",
-                "THEY DON'T PASS!",
+                "REMEMBER GRIM BATOL!",
+                "THE MOUNTAIN DOESN'T MOVE!",
             },
         },
         RuneScholar = {
             name = "Rune & Stone Scholar",
             blurb = "Measured and curious: lore, runes and the long memory of the stone.",
             dialectIntensity = -1,
-            openers = {
-                "Consider this,",
-                "The old runes say,",
-                "By the records,",
-                "As the lorekeepers note,",
-                "Curious thing,",
-                "If ye'll permit me,",
-            },
-            closers = {
-                ", as the stone remembers.",
-                ", so the runes read.",
-                ", worth writin' down.",
-                ", the annals agree.",
-                ", fascinatin', really.",
-                ", or so I've read.",
-            },
             FriendGreetings = {
                 Default = {
                     "Ah, {target}. Have ye a moment? I found the oddest inscription.",
@@ -406,10 +348,12 @@ MonologueEngine.Data.Races["Dwarf"] = {
                 },
             },
             BattleCry = {
-                "BY STONE AN' RUNE!",
-                "THE OLD FORGES REMEMBER!",
                 "FOR THE EXPLORERS' LEAGUE!",
-                "LET THE STONE REMEMBER THIS!",
+                "BY THE TITANS!",
+                "FOR THE HALL O' EXPLORERS!",
+                "KHAZ'GOROTH GUIDE ME ARM!",
+                "KHAZ MODAN!",
+                "FOR BRANN AN' THE LEAGUE!",
             },
         },
     },
@@ -642,13 +586,15 @@ MonologueEngine.Data.Races["Dwarf"] = {
     -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
     -- character profile may replace them; My Voice battle cries are added on top.
     BattleCry = {
-        "FOR KHAZ MODAN!",
-        "BY MAGNI'S BEARD!",
-        "IRONFORGE STANDS!",
-        "STONE AN' STEEL!",
-        "FOR THE MOUNTAIN!",
-        "AXES HIGH!",
-        "NOT ONE STEP BACK!",
-        "KHAZ MODAN REMEMBERS!",
+        "KHAZ MODAN!",
+        "FOR IRONFORGE!",
+        "BRONZEBEARD!",
+        "GOL'KOSH!",
+        "FOR MAGNI!",
+        "REMEMBER GRIM BATOL!",
+        "TO ME, KIN!",
+        "FOR THE ANCESTORS!",
+        "IRONFORGE! TO ARMS!",
+        "AXES! FOR KHAZ MODAN!",
     },
 }

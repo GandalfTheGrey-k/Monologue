@@ -54,26 +54,12 @@ MonologueEngine.Data.Races["Scourge"] = {
             ["^gonna$"] = "going to",
             ["^wanna$"] = "want to",
         },
-        interjections = { "quite", "truly", "how droll", "naturally" },
-        openers = {
-            "Listen,",
-            "Tell me,",
-            "Frankly,",
-            "How droll,",
-            "Pay attention,",
-            "Consider this,",
-            "In my experience,",
-            "For the Dark Lady,",
-        },
-        closers = {
-            ", for the Dark Lady.",
-            ", for whatever that is worth.",
-            ", if you still draw breath.",
-            ", while it lasts.",
-            ", how droll.",
-            ", as expected.",
-            ", naturally.",
-            ", the grave awaits.",
+        -- Oaths: short exclamations said now and then before a greeting (Greet), a kill
+        -- line or battle cry (Fight) or a low-health line (Hurt). Each stands as its own sentence.
+        oaths = {
+            Greet = { "Ah. You.", "Greetings.", "Well, well.", "Dark Lady watch over you." },
+            Fight = { "For the Dark Lady!", "Death comes!", "For the Forsaken!", "Victory for Sylvanas!", "Ha!" },
+            Hurt = { "Inconvenient.", "Tch.", "I've been dead before.", "Bones, hold!", "Not again!" },
         },
     },
     GuildGreetings = {
@@ -166,29 +152,13 @@ MonologueEngine.Data.Races["Scourge"] = {
             "Death was not the end for me, {target}. It will be for you.",
         },
     },
-    -- Racial Temperament Presets (My Voice tab). A preset replaces openers/closers, merges
+    -- Racial Temperament Presets (My Voice tab). A preset may replace the oaths, merges
     -- FriendGreetings, replaces BattleCry and may shift intensity by -1..+1.
     Presets = {
         BitterRevenant = {
             name = "Bitter Revenant",
             blurb = "Cold, vengeful and resentful of the living; the Forsaken's rage given voice.",
             dialectIntensity = 1,
-            openers = {
-                "Hmph,",
-                "How tedious,",
-                "Do you know,",
-                "Spare me,",
-                "Listen well,",
-                "Death changes things,",
-            },
-            closers = {
-                ", and I resent it.",
-                ", how tiresome.",
-                ", you wouldn't understand.",
-                ", I've seen worse.",
-                ", ha.",
-                ", so it goes.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. You still draw breath. How quaint.",
@@ -206,22 +176,6 @@ MonologueEngine.Data.Races["Scourge"] = {
             name = "Cold Apothecary",
             blurb = "Analytical, detached and curious about everything, including your decay.",
             dialectIntensity = -1,
-            openers = {
-                "Fascinating,",
-                "Observe,",
-                "One notes,",
-                "Clinically speaking,",
-                "Specimen,",
-                "By my notes,",
-            },
-            closers = {
-                ", as expected.",
-                ", for science.",
-                ", noted.",
-                ", the results are clear.",
-                ", how curious.",
-                ", entirely logical.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}. A fine specimen. Do hold still.",
@@ -239,22 +193,6 @@ MonologueEngine.Data.Races["Scourge"] = {
             name = "Gallows-Humor Ghoul",
             blurb = "Grim jokes, bone-dry sarcasm and a sense of humor that outlived the body.",
             dialectIntensity = 1,
-            openers = {
-                "Dead funny,",
-                "Ha ha,",
-                "Bury me,",
-                "Well, I'm dead,",
-                "Grave news,",
-                "Oh, the irony,",
-            },
-            closers = {
-                ", I'm just dying to know.",
-                ", how grave.",
-                ", ha, ha.",
-                ", it's a killer.",
-                ", can't make this up.",
-                ", rest in pieces.",
-            },
             FriendGreetings = {
                 Default = {
                     "{target}! You look alive! Terrible choice.",

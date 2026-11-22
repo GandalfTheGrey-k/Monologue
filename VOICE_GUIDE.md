@@ -53,7 +53,7 @@ The race accent is added on top by the translator, so write persona lines in pla
 | Grizzled Veteran | Economical, tired, practical, has seen worse | "Seen this one before. Keep your feet." |
 | Zealous Crusader | Devout, absolute, sees the fight as judgment | "The Light keeps the ledger. You're overdue." |
 
-Greetings, battle cries, openers and closers are shaped by the **Racial Temperament** preset
+Greetings and battle cries are shaped by the **Racial Temperament** preset
 (three per race, set on My Voice). Write each temperament's pools so that two characters of the
 same race with different temperaments are easy to tell apart.
 

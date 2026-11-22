@@ -29,18 +29,6 @@ MonologueEngine.Data.Classes["DRUID"] = {
             ["calm down"] = { "ease, friend", "settle, the wild is patient" },
             ["nature calls"] = { "the wild calls", "the grove calls" },
         },
-        openers = {
-            "By root and branch,",
-            "The wild says,",
-            "Listen to the leaves,",
-            "As the seasons turn,",
-        },
-        closers = {
-            ", so the wild turns.",
-            ", root and branch.",
-            ", as the seasons go.",
-            ", green and growing.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

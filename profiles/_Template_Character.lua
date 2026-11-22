@@ -6,8 +6,7 @@
     profile to one realm. Keys beginning with "_Template" are never matched.
 
     SINGLE-FILE SCHEMA (this file):
-      Dialect          wordSwaps / phonetics / suffixes layered over race and persona
-      Fragments        openers / closers drawn by the {opener} and {closer} tokens
+      Dialect          wordSwaps / phonetics / oaths layered over race and persona
       GuildGreetings   greeting pools (Standard, plus optional rank-specific pools)
       FriendGreetings  greetings for players marked with /mono friend: Default, plus optional
                        raceFile pools (e.g. NightElf) and pools keyed by a friend's note;
@@ -45,7 +44,7 @@
 
 MonologueEngine.Data.Profiles["_Template_Character"] = MonologueEngine.Data.Profiles["_Template_Character"] or {
     -- DIALECT. Every key is optional. Layering: class dialect < race dialect < persona < this
-    -- profile. Swap tables merge key by key; lists (openers, closers, ...) replace the lower
+    -- profile. Swap tables merge key by key; lists (oaths, ...) replace the lower
     -- layer's list. Full format notes are at the top of Monologue_Translator.lua.
     Dialect = {
         wordSwaps = {
@@ -57,31 +56,17 @@ MonologueEngine.Data.Profiles["_Template_Character"] = MonologueEngine.Data.Prof
             ["watch out"] = "mind yourself",
         },
         contractions = { ["do not"] = "don't" },            -- used only part of the time (cadence)
-        interjections = { "mark you", "truly" },            -- dropped in after the first comma of longer lines
-        openers = { "Well met,", "Mark this," },            -- Unhinged: prepended (not after a greeting or exclamation)
-        closers = { ", so it is.", ", by my honor." },      -- Unhinged: appended (not after "..." or several marks)
-        -- Older single-string swaps and the older "suffixes" list name keep working.
-    },
-    Fragments = {
-        openers = {
-            "By the tides,",
-            "Mark my words,",
-            "Listen well,",
-        },
-        closers = {
-            "or suffer the consequences!",
-            "as it was foretold.",
-            "and remember me!",
-        },
+        oaths = { Fight = { "By my honor!" }, Hurt = { "Not yet!" } },  -- replaces the race's
+        -- Older single-string swaps keep working.
     },
     GuildGreetings = {
         Standard = {
-            "{opener} well met, {rank}.",
+            "{opener} Well met, {rank}.",
         },
     },
     FriendGreetings = {
         Default = {
-            "{opener} well met, {target}!",
+            "{opener} Well met, {target}!",
             "{target}! A welcome sight, as always.",
         },
     },
@@ -129,7 +114,7 @@ MonologueEngine.Data.Profiles["_Template_Character"] = MonologueEngine.Data.Prof
     BossFeats = {
         RAGNAROS = { -- Unlocked after defeating Ragnaros in Molten Core
             PvPLines = {
-                Nemesis = { "{opener} I have faced the Firelord himself, {target}! You cannot burn me {closer}" },
+                Nemesis = { "{opener} I have faced the Firelord himself, {target}! You cannot burn me!" },
             },
         },
         ONYXIA = { -- Unlocked after defeating Onyxia
@@ -142,7 +127,7 @@ MonologueEngine.Data.Profiles["_Template_Character"] = MonologueEngine.Data.Prof
         FirstClash = { "{opener} I don't know you, {target}, but {zone} is no place to linger." },
         DejaVu = { "{zone} again. Blood keeps getting spilled here." },
         Rematch = { "Back for more, {target}?" },
-        Nemesis = { "{opener} You again? I'll make sure you stay down, {target}! {closer}" },
+        Nemesis = { "{opener} You again? I'll make sure you stay down, {target}!" },
         Vendetta = { "I haven't forgotten our duel in {lastzone}, {target}!" },
         Dominance = { "You've fallen to me before, {target}. Walk away." },
     }

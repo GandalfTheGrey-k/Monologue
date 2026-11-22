@@ -12,12 +12,12 @@
     "Webb Page" or "Webb-Page".
 
     Layering: race < class (DRUID) < Growth Arc persona < guild pack < this profile.
-    Lists defined here (suffixes, greetings, fragments) REPLACE the lower layers' lists of
+    Lists defined here (greetings, lines) REPLACE the lower layers' lists of
     the same name; word swaps MERGE into the race's, so only pick swap words the race pack
     doesn't already use. The race accent still runs over spoken lines.
 
     TWEAKING WEBB'S PERSONALITY: edit the three clearly marked blocks below
-    (Dialect.wordSwaps, Fragments.openers, Fragments.closers). Everything else in the
+    (Dialect.wordSwaps, Dialect.phraseSwaps). Everything else in the
     profile (combat, PvP, growth) lives in the sibling files in this folder.
 --]]
 
@@ -41,28 +41,9 @@ MonologueEngine.Data.Profiles["WebbPage"].Dialect = {
     phraseSwaps = {
         ["pull the mob"] = { "fetch the critter", "invite the critter over" },
     },
-    -- Optional flourishes (Unhinged intensity only). Left out on purpose so the race's own
-    -- openers and closers stay. To give Webb their own, uncomment (lists replace the race's):
-    -- openers = { "Easy now,", "Okay okay," },
-    -- closers = { ", easy now.", ", fur and thorns." },
-}
-
--- ---------------------------------------------------------------------------------------
--- FRAGMENTS: pieces dropped into lines wherever they contain {opener} or {closer}.
--- ---------------------------------------------------------------------------------------
-MonologueEngine.Data.Profiles["WebbPage"].Fragments = {
-    openers = {
-        "Easy now,",
-        "Okay, listen,",
-        "Fur and thorns,",
-        "By the winds,",
-    },
-    closers = {
-        "...probably.",
-        "Nature's got us.",
-        "no fur off my back.",
-        "the winds willing.",
-    },
+    -- Optional oaths. Left out on purpose so the Skyborne race's own oaths stay. To give
+    -- Webb their own (it replaces the race's), uncomment:
+    -- oaths = { Fight = { "Fur and thorns!", "By the winds!" }, Hurt = { "Easy now!" } },
 }
 
 -- ---------------------------------------------------------------------------------------

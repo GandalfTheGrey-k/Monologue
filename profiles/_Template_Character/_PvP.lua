@@ -12,5 +12,5 @@ MonologueEngine.Data.Profiles["_Template_Character_Split"].PvPLines = {
     Rematch = { "Back for more, {target}?" },
     Vendetta = { "I haven't forgotten our duel in {lastzone}, {target}!" },
     Dominance = { "You've fallen to me before, {target}. Walk away." },
-    Nemesis = { "{opener} You again? I'll make sure you stay down, {target}! {closer}" },
+    Nemesis = { "{opener} You again? I'll make sure you stay down, {target}!" },
 }

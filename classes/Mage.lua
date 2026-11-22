@@ -28,18 +28,6 @@ MonologueEngine.Data.Classes["MAGE"] = {
             ["i need a moment"] = { "give me a moment to concentrate", "one moment, calculating" },
             ["open a portal"] = { "open a gateway", "tear open a rift" },
         },
-        openers = {
-            "Naturally,",
-            "Observe,",
-            "Theoretically,",
-            "Consider this,",
-        },
-        closers = {
-            ", naturally.",
-            ", as the calculations predict.",
-            ", quite elementary.",
-            ", with some luck.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {

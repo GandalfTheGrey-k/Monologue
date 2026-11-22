@@ -4,10 +4,10 @@
     draws from, so every identity layer can speak in every moment:
         Combat  pull lines           LowHP  dropping low in a fight
         Kill    a kill (after combat) Loot   opening loot          Idle  out-of-combat chatter
-    plus Flavor (openers, closers, word swaps) for allegiances, upbringings and traits, the
+    plus Flavor (word swaps) for allegiances, upbringings and traits, the
     hometown "roots" lines and the Character Anchor lines ({oath}, {nemesis}, {catchphrase}).
 
-    Flavor = { openers = {...}, closers = {...}, wordSwaps = { ["word"] = "swap" or {variants} } }
+    Flavor = { wordSwaps = { ["word"] = "swap" or {variants} } }
         Applied to about 30% of lines (one layer per line) at Full Dialect or Light Flavor.
 
     Follow VOICE_GUIDE.md: specific, in-world, mostly calm.
@@ -30,8 +30,7 @@ Extend(T.TavernWarm, {
     Kill = { "And down they go. Cheers.", "That's one for the tavern tale.", "Easy now. Rest." },
     Loot = { "Ooh, a little something for the tab.", "Drinks money!" },
     Idle = { "I could go for a song right about now.", "Wonder who's at the inn tonight.", "Good company makes a long road shorter." },
-    Flavor = { openers = { "Ha,", "Oh, friend,", "Now then," }, closers = { ", friend.", ", and cheers to that." },
-               wordSwaps = { ["drink"] = { "pint", "round" }, ["friends"] = "pals" } },
+    Flavor = { wordSwaps = { ["drink"] = { "pint", "round" }, ["friends"] = "pals" } },
 })
 Extend(T.OathBound, {
     Combat = { "By my oath, you'll not pass.", "I stand where I swore to stand.", "Duty calls. I answer.", "Steel and honor." },
@@ -39,8 +38,7 @@ Extend(T.OathBound, {
     Kill = { "Duty done.", "As sworn.", "It's finished. Rest." },
     Loot = { "For the cause, not for me.", "Spoils go where they're needed." },
     Idle = { "A promise is a weight worth carrying.", "I renew my vow every morning.", "Keep your word. Even when it's hard." },
-    Flavor = { openers = { "On my oath,", "By my word," }, closers = { ", as sworn.", ", on my honor." },
-               wordSwaps = { ["promise"] = "vow", ["job"] = "duty" } },
+    Flavor = { wordSwaps = { ["promise"] = "vow", ["job"] = "duty" } },
 })
 Extend(T.Cynical, {
     Combat = { "Oh good. Another one.", "This'll end well, I'm sure.", "Fine. Let's get it over with.", "Nobody's paying me enough for this." },
@@ -48,8 +46,7 @@ Extend(T.Cynical, {
     Kill = { "Yes, yes, very heroic.", "One down. Infinity to go.", "Thrilling." },
     Loot = { "Junk. As expected.", "At least it's not nothing. Barely." },
     Idle = { "Heroes. Always someone else's job.", "Another day, another errand.", "Ever notice the reward never covers repairs?" },
-    Flavor = { openers = { "Sure,", "Oh, wonderful,", "Naturally," }, closers = { ", I suppose.", ", or whatever." },
-               wordSwaps = { ["great"] = "fine", ["hero"] = "errand-runner", ["heroes"] = "errand-runners" } },
+    Flavor = { wordSwaps = { ["great"] = "fine", ["hero"] = "errand-runner", ["heroes"] = "errand-runners" } },
 })
 Extend(T.PlagueHardened, {
     Combat = { "Quick and clean. No time for mercy.", "I've seen worse. Much worse.", "Let's get this over with before it spreads.", "Breathe through your mouth." },
@@ -57,8 +54,7 @@ Extend(T.PlagueHardened, {
     Kill = { "Make sure it stays down.", "Done. Check the body.", "Burn it if you can." },
     Loot = { "Wash your hands after touching that.", "Check it for rot first." },
     Idle = { "Every quiet day is a gift.", "I count the living. It's a short list.", "Don't drink from wells you don't know." },
-    Flavor = { openers = { "Grim truth,", "Listen," }, closers = { ", if we live.", ", before the dead get up." },
-               wordSwaps = { ["sick"] = "plagued", ["dead"] = "fallen" } },
+    Flavor = { wordSwaps = { ["sick"] = "plagued", ["dead"] = "fallen" } },
 })
 Extend(T.Stoic, {
     Combat = { "Begin.", "Steady.", "Now.", "So be it." },
@@ -66,8 +62,7 @@ Extend(T.Stoic, {
     Kill = { "Done.", "Enough.", "Rest." },
     Loot = { "Useful.", "Take it." },
     Idle = { "Quiet is good.", "Breathe. Wait.", "Patience." },
-    Flavor = { openers = { "Hm.", "So." }, closers = { ", nothing more.", ", that's all." },
-               wordSwaps = { ["really"] = "truly", ["very"] = "quite" } },
+    Flavor = { wordSwaps = { ["really"] = "truly", ["very"] = "quite" } },
 })
 Extend(T.HotBlooded, {
     Combat = { "Come here and say that to my face!", "I've been waiting all day for this!", "You picked a bad day.", "Let's go! Now!" },
@@ -75,8 +70,7 @@ Extend(T.HotBlooded, {
     Kill = { "HA! Stay down!", "Who's next?", "Again!" },
     Loot = { "Mine now!", "Ha! Spoils!" },
     Idle = { "I'm bored. Someone pick a fight.", "My blood's up and nothing to hit.", "Waiting makes me itch." },
-    Flavor = { openers = { "Blood and fire,", "Gah," }, closers = { ", and I mean it!", ", believe me!" },
-               wordSwaps = { ["angry"] = "furious", ["fight"] = "brawl" } },
+    Flavor = { wordSwaps = { ["angry"] = "furious", ["fight"] = "brawl" } },
 })
 
 ---------------------------------------------------------------------------
@@ -89,80 +83,70 @@ Extend(A.ScarletCrusade, {
     Kill = { "Purged.", "Another stain cleansed." },
     Loot = { "Tithe for the Crusade." },
     Idle = { "Hearthglen's bells should be ringing now.", "Pray, then sharpen your blade." },
-    Flavor = { openers = { "By the Light,", "Light willing," }, closers = { ", Light preserve us.", ", in the Light's name." },
-               wordSwaps = { ["undead"] = "unclean", ["sin"] = "heresy" } },
+    Flavor = { wordSwaps = { ["undead"] = "unclean", ["sin"] = "heresy" } },
 })
 Extend(A.Defias, {
     LowHP = { "Westfall bled worse.", "Not going down for Stormwind." },
     Kill = { "Another debt collected.", "Put it on the crown's tab." },
     Loot = { "Wages, finally." },
     Idle = { "The nobles still haven't paid.", "Moonbrook was home once. It will be again." },
-    Flavor = { openers = { "Between us,", "Quietly," }, closers = { ", no thanks to the crown.", ", brother." },
-               wordSwaps = { ["guard"] = "watch-dog", ["guards"] = "watch-dogs", ["noble"] = "silk-coat", ["nobles"] = "silk-coats" } },
+    Flavor = { wordSwaps = { ["guard"] = "watch-dog", ["guards"] = "watch-dogs", ["noble"] = "silk-coat", ["nobles"] = "silk-coats" } },
 })
 Extend(A.ArgentDawn, {
     LowHP = { "Hope holds me up.", "Not yet. The Dawn needs me." },
     Kill = { "Rest now. Truly rest.", "One less horror." },
     Loot = { "Light's Hope could use this." },
     Idle = { "Light's Hope Chapel feels far away tonight.", "Every soul saved matters." },
-    Flavor = { openers = { "Light willing,", "With hope," }, closers = { ", for the Dawn.", ", Light keep us." },
-               wordSwaps = { ["undead"] = "lost", ["hope"] = "dawn" } },
+    Flavor = { wordSwaps = { ["undead"] = "lost", ["hope"] = "dawn" } },
 })
 Extend(A.SI7, {
     LowHP = { "Compromised. Still operational.", "Note to self: duck." },
     Kill = { "Target neutralized.", "Clean. Nobody saw a thing." },
     Loot = { "Evidence. Bagged." },
     Idle = { "Report's due to Shaw by nightfall.", "Everyone's a suspect. Even you." },
-    Flavor = { openers = { "Quietly now,", "Off the record," }, closers = { ", between us.", ", for the Crown." },
-               wordSwaps = { ["enemy"] = "target", ["enemies"] = "targets", ["plan"] = "operation" } },
+    Flavor = { wordSwaps = { ["enemy"] = "target", ["enemies"] = "targets", ["plan"] = "operation" } },
 })
 Extend(A.ExplorersLeague, {
     LowHP = { "Must survive. Must publish.", "Not dying before the paper's done." },
     Kill = { "Write that down.", "Fascinating specimen. Was." },
     Loot = { "Ooh. Is that Titan-forged?" },
     Idle = { "The Hall of Explorers needs new exhibits.", "Every rock has a story." },
-    Flavor = { openers = { "Fascinating,", "Curious," }, closers = { ", for the archives.", ", worth a footnote." },
-               wordSwaps = { ["old"] = "ancient", ["thing"] = "artifact" } },
+    Flavor = { wordSwaps = { ["old"] = "ancient", ["thing"] = "artifact" } },
 })
 Extend(A.CenarionCircle, {
     LowHP = { "The land will heal me.", "Roots hold. So do I." },
     Kill = { "Return to the earth.", "Balance, restored." },
     Loot = { "Nature provides." },
     Idle = { "Listen. The trees are talking.", "Moonglade calls me home soon." },
-    Flavor = { openers = { "In balance,", "Peace," }, closers = { ", as the land wills.", ", so says the Circle." },
-               wordSwaps = { ["forest"] = "grove", ["world"] = "land" } },
+    Flavor = { wordSwaps = { ["forest"] = "grove", ["world"] = "land" } },
 })
 Extend(A.Steamwheedle, {
     LowHP = { "This is costing me money.", "Bad investment, this fight." },
     Kill = { "Profitable.", "That's a write-off." },
     Loot = { "Inventory acquired." },
     Idle = { "Time is money, and I'm wasting both.", "Prices in Booty Bay are a crime." },
-    Flavor = { openers = { "Business is business,", "Bottom line," }, closers = { ", time is money.", ", no refunds." },
-               wordSwaps = { ["gold"] = "profit", ["friend"] = "customer", ["friends"] = "customers" } },
+    Flavor = { wordSwaps = { ["gold"] = "profit", ["friend"] = "customer", ["friends"] = "customers" } },
 })
 Extend(A.Bloodsail, {
     LowHP = { "Just a scratch, matey.", "Not sinking yet." },
     Kill = { "Feed 'em to the sharks.", "Another for the plank." },
     Loot = { "Plunder!" },
     Idle = { "Miss the sway of a deck.", "Land's too still." },
-    Flavor = { openers = { "Arr,", "Listen, matey," }, closers = { ", savvy?", ", by the briny deep." },
-               wordSwaps = { ["gold"] = "doubloons", ["money"] = "plunder", ["friend"] = "matey" } },
+    Flavor = { wordSwaps = { ["gold"] = "doubloons", ["money"] = "plunder", ["friend"] = "matey" } },
 })
 Extend(A.ThoriumBrotherhood, {
     LowHP = { "Cracked, not broken.", "Thorium holds." },
     Kill = { "Hammered flat.", "Good forging." },
     Loot = { "Ore for the forge." },
     Idle = { "The forge at Thorium Point burns day and night.", "Free hands make better steel." },
-    Flavor = { openers = { "Hammer and anvil,", "Plain truth," }, closers = { ", forged true.", ", by the Brotherhood." },
-               wordSwaps = { ["work"] = "smithing", ["strong"] = "tempered" } },
+    Flavor = { wordSwaps = { ["work"] = "smithing", ["strong"] = "tempered" } },
 })
 Extend(A.HordeWarCouncil, {
     LowHP = { "Blood for the Horde. Not all of it mine.", "I fall only when the Warchief says." },
     Kill = { "For the Horde.", "Victory. As ordered." },
     Loot = { "Supplies for the war." },
     Idle = { "Orgrimmar's walls need more guards.", "The War-Council expects reports." },
-    Flavor = { openers = { "By the Warchief's will,", "Hear me," }, closers = { ", for the Horde.", ", Lok'tar." },
-               wordSwaps = { ["fight"] = "battle", ["win"] = "conquer" } },
+    Flavor = { wordSwaps = { ["fight"] = "battle", ["win"] = "conquer" } },
 })
 
 ---------------------------------------------------------------------------
@@ -172,28 +156,27 @@ Extend(A.HordeWarCouncil, {
 local U = Data.Upbringings
 Extend(U.Scourge, {
     LowHP = { "Survived the plague. I'll survive this." }, Kill = { "Stay dead." }, Loot = { "Check it for plague first." },
-    Flavor = { openers = { "Grim as it is," }, closers = { ", before the dead get up." }, wordSwaps = { ["dead"] = "fallen" } },
+    Flavor = { wordSwaps = { ["dead"] = "fallen" } },
 })
 Extend(U.Tavern, {
     LowHP = { "Took worse in the cellar brawls." }, Kill = { "Last orders, mate." }, Loot = { "Pocket money!" },
-    Flavor = { openers = { "Listen, mate," }, closers = { ", on my tab." }, wordSwaps = { ["money"] = "coin", ["friend"] = "mate" } },
+    Flavor = { wordSwaps = { ["money"] = "coin", ["friend"] = "mate" } },
 })
 Extend(U.Forge, {
     LowHP = { "Bent, not broken." }, Kill = { "Quenched." }, Loot = { "Hm. Decent metal." },
-    Flavor = { openers = { "Plain as iron," }, closers = { ", hammered true." },
-               wordSwaps = { ["strong"] = "tempered", ["weak"] = "brittle", ["plan"] = "blueprint" } },
+    Flavor = { wordSwaps = { ["strong"] = "tempered", ["weak"] = "brittle", ["plan"] = "blueprint" } },
 })
 Extend(U.Watch, {
     LowHP = { "Wounded. Still on post." }, Kill = { "Target down. Next." }, Loot = { "Confiscated." },
-    Flavor = { openers = { "Eyes up," }, closers = { ", by the book." }, wordSwaps = { ["attack"] = "engage", ["fight"] = "skirmish" } },
+    Flavor = { wordSwaps = { ["attack"] = "engage", ["fight"] = "skirmish" } },
 })
 Extend(U.Road, {
     LowHP = { "Road's taken more from me than this." }, Kill = { "Clear road ahead." }, Loot = { "Something to trade at the next stop." },
-    Flavor = { openers = { "Out on the road," }, closers = { ", as the road teaches." }, wordSwaps = { ["home"] = "camp", ["city"] = "walls" } },
+    Flavor = { wordSwaps = { ["home"] = "camp", ["city"] = "walls" } },
 })
 Extend(U.Magic, {
     LowHP = { "My wards are fraying." }, Kill = { "The omen was right." }, Loot = { "This hums. Interesting." },
-    Flavor = { openers = { "Strange omen," }, closers = { ", the ley-lines agree." }, wordSwaps = { ["feeling"] = "omen", ["strange"] = "uncanny" } },
+    Flavor = { wordSwaps = { ["feeling"] = "omen", ["strange"] = "uncanny" } },
 })
 
 ---------------------------------------------------------------------------

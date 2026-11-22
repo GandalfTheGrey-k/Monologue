@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.2 (alpha)
+MONOLOGUE  -  version 0.1.3 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
@@ -20,15 +20,41 @@ INSTALLING
 4. Log in. A welcome card appears after a few seconds. Type /mono to open the settings.
 
 
+UPDATING
+--------
+1. Close the game.
+2. Delete the old Monologue_v.1 folder from AddOns (your settings are kept: they live in
+   the WTF folder, not in the addon folder).
+3. Download the newest Monologue_v.1.zip:
+       https://github.com/GandalfTheGrey-k/Monologue/releases/latest
+4. Extract it into AddOns as in INSTALLING, start the game, and type /mono version.
+
+
+NEW IN 0.1.3
+------------
+- Oaths replace the old openers and closers: now and then a short oath ("Gol'kosh!") before a
+  greeting, kill line, low-health line or battle cry. Never on chat you type. Your old
+  custom openers and closers carry over as My Oaths.
+- Preview above the chat box while you type (General tab). What you see is what is sent.
+- Words Never Translated (My Voice tab, /mono keep <word>). Titles stay with names.
+- In / out of character: keybind, /mono ic, /mono ooc. The minimap book goes grey when out.
+- "lad / lass" follows the pronouns in your own line, never your target.
+- In a fight: at most 2 lines, each move once, no repeat pull line for the same mob (10 min).
+- Everyday moments: eating, mounting, walking into an inn or city, a party member falling.
+- Speech effects: slurred when drunk, shaky when badly hurt (General tab).
+- Guild greeting works in any guild. Real Dwarf battle cries.
+
+
 QUICK START
 -----------
 - Just play. Every few pulls, a signature move says a line in /s. Ordinary attacks (Heroic
   Strike, Fireball spam...) stay quiet.
 - /mono opens the settings. It has three tabs:
-    General      accent strength, Strict Safe-Mode, debug mode
+    General      accent strength, chat preview, speech effects, Strict Safe-Mode, debug
     Voice Lines  where and how often you speak (sliders), the Battle Cry and Greet buttons
     My Voice     your character: personality, clan, hometown, allegiance, upbringing,
-                 traits, oath / nemesis / catchphrase, your own lines and word swaps
+                 traits, oath / nemesis / catchphrase, My Oaths, words never translated,
+                 your own lines and word swaps
 - Quick picks worth trying first (My Voice tab):
     Persona preset, Racial Temperament, Clan / Lineage, Hometown, Allegiance / Order,
     Upbringing, Defining Trait, Dialect Strength (Full / Light Flavor / Clean)
@@ -47,6 +73,8 @@ SLASH COMMANDS
   /mono situations   what your lines could react to right now (target, mana, night...)
   /mono party        party members who also run Monologue
   /mono greet        greet your target (or say a waiting line)
+  /mono ic | ooc     in character / out of character (also a keybind)
+  /mono keep <word>  a word that is never translated (/mono unkeep removes it)
   /mono cry          battle cry
   /mono debug        show [Monologue Debug] lines in chat
   /mono version      your version

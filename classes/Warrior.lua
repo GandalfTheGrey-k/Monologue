@@ -30,18 +30,6 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
             ["take cover"] = { "shields up", "down behind the line" },
             ["follow me"] = { "on me", "to me, steel up" },
         },
-        openers = {
-            "Hear me,",
-            "Stand fast,",
-            "Listen,",
-            "Steel yourself,",
-        },
-        closers = {
-            ", for honor.",
-            ", steel and stone.",
-            ", hold the line.",
-            ", till the last blow.",
-        },
     },
     -- Tier1_MajorCD: the Battle Cry fallback (when a character has no BattleCry pool).
     -- Tier3_LowHP: said when your health drops low. Casts never use these pools.

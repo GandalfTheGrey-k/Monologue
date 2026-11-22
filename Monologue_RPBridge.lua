@@ -35,8 +35,9 @@
       {wins} {losses}   Your duel record against the targeted friend
       {rival}    The enemy a party member just warned about
       {rank}     Player's guild rank name
-      {opener}   Line from ActiveProfile.Fragments.openers (never the same twice in a row)
-      {closer}   Line from ActiveProfile.Fragments.closers (never the same twice in a row)
+      {opener}   A fighting oath from Dialect.oaths (Fight, plus My Oaths), never the same
+                 twice in a row; written as its own sentence: "{opener} You again?"
+      {closer}   Retired (openers and closers became oaths in 0.1.3): removed from the line
 
     Dialect translation (word and phrase swaps, variants, cadence) lives in
     Monologue_Translator.lua; this module only resolves tokens and RP-addon data.
@@ -229,20 +230,26 @@ local function ReplaceToken(text, token, resolver)
     end))
 end
 
-local function DrawFragment(categoryKey, poolKey)
+-- A fighting oath for the {opener} token: Dialect.oaths.Fight plus Any (My Oaths)
+local function DrawOath()
     local profile = MonologueEngine and MonologueEngine.ActiveProfile
-    local fragments = profile and profile.Fragments
-    local pool = type(fragments) == "table" and fragments[poolKey]
-    if type(pool) ~= "table" or #pool == 0 then return "" end
-
-    -- The translator's anti-repeat picker remembers the last 4 openers and last 4 closers, so
-    -- the same fragment never comes up twice in a row, whether it is drawn here (a {opener}
-    -- token) or added automatically by the dialect. Falls back to the shuffled deck.
-    if MonologueTranslator and MonologueTranslator.PickAvoiding then
-        local historyKey = (poolKey == "openers") and "opener" or "closer"
-        return MonologueTranslator.PickAvoiding(historyKey, pool, 4) or ""
+    local dialect = profile and profile.Dialect
+    local oaths = type(dialect) == "table" and type(dialect.oaths) == "table" and dialect.oaths or nil
+    if not oaths then return "" end
+    local pool = {}
+    for _, list in ipairs({ oaths.Fight, #oaths > 0 and oaths or oaths.Any }) do
+        if type(list) == "table" then
+            for _, line in ipairs(list) do
+                if type(line) == "string" and line ~= "" then pool[#pool + 1] = line end
+            end
+        end
     end
-    return MonologueEngine:GetShuffledLine(categoryKey, pool) or ""
+    if #pool == 0 then return "" end
+    -- The translator's anti-repeat picker shares its history with the oaths it adds itself
+    if MonologueTranslator and MonologueTranslator.PickAvoiding then
+        return MonologueTranslator.PickAvoiding("oath", pool, 4) or ""
+    end
+    return pool[math.random(#pool)]
 end
 
 -- Neutral words for a live-detail token that can't be filled (custom lines only)
@@ -434,15 +441,18 @@ function Bridge:ProcessTokens(text, targetUnit)
         return rankName
     end)
 
-    -- Dynamic Replacement: {opener}
-    text = ReplaceToken(text, "{opener}", function()
-        return DrawFragment("Fragment_Opener", "openers")
-    end)
+    -- Dynamic Replacement: {opener} (an oath; with none to draw, the token and its space go)
+    if text:find("{opener}", 1, true) then
+        local oath = DrawOath()
+        if oath == "" then
+            text = text:gsub("%s*{opener}%s*", " ")
+        else
+            text = ReplaceToken(text, "{opener}", function() return oath end)
+        end
+    end
 
-    -- Dynamic Replacement: {closer}
-    text = ReplaceToken(text, "{closer}", function()
-        return DrawFragment("Fragment_Closer", "closers")
-    end)
+    -- {closer} is retired: drop it and the space before it
+    text = text:gsub("%s*{closer}", "")
 
     -- Live-detail tokens ({weapon}, {spell}, {party}, ...: Engine.DetailTokens). Built-in
     -- lines that need an unavailable detail are skipped before they get here; the fallback

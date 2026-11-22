@@ -29,6 +29,7 @@ MonologueEngine = {
         Situations = {}, -- [situation key] = { lines } (situations/Situations.lua): world reactions
         DetailLines = {}, -- { Combat, Kill, LowHP, Idle } (situations/Details.lua): live-detail lines
         SpellContextLines = {}, -- { Player, Rare, Elite, Hurt, Party } (situations/Details.lua): shared spell context lines
+        MomentLines = {}, -- { EatDrink, Mount, Rest, AllyDown } (situations/Moments.lua): everyday moments
         Allegiances = {}, -- Azeroth Identity (identity/Identity.lua): allegiances / orders
         Professions = {}, -- Azeroth Identity: trade lines
         Hometowns = {},   -- Azeroth Identity: region-grouped hometown list
@@ -85,6 +86,7 @@ local Tune = {}
 -- Key Bindings > AddOns > Monologue (bindings are defined in Bindings.xml)
 BINDING_HEADER_MONOLOGUE = "Monologue"
 BINDING_NAME_MONOLOGUE_GREET = "Greet target (or say the waiting greeting)"
+BINDING_NAME_MONOLOGUE_TOGGLE_IC = "Toggle in character / out of character"
 BINDING_NAME_MONOLOGUE_BATTLECRY = "Battle cry"
 
 local frame = CreateFrame("Frame", "MonologueCoreFrame")
@@ -232,6 +234,11 @@ local DEFAULT_CONFIG = {
     strictSafeMode = false,    -- Strict Safe-Mode: automated speech only prints in your own chat (General tab, /mono safemode)
     minimapShown = true,       -- Minimap button visibility (/mono minimap)
     minimapAngle = 215,        -- Minimap button position, in degrees around the minimap
+    chatPreview = true,        -- Preview of the translation just above the chat box while typing (General tab)
+    speechEffects = true,      -- Slurred when drunk, shaky when badly hurt (General tab)
+    momentLines = true,        -- Everyday moments: eating, mounting, resting, an ally falling (Voice Lines tab)
+    outOfCharacter = false,    -- In-character toggle (keybind, /mono ic, /mono ooc): true = no translation, no automatic lines
+    -- keepWords = { "word", ... } is written by the Words Never Translated list (My Voice tab, /mono keep)
     -- buttonPos = { point, relPoint, x, y } is written when the button is moved
 }
 
@@ -243,7 +250,7 @@ local CHAR_DB_KEYS = {
     "Feats",           -- [FEAT_KEY] = true
     "Friends",         -- Marked friends: [normalizedName] = { name, race, note, addedAt }
     "Duels",           -- Duel records (separate from Rivals): [normalizedName] = { name, wins, losses, lastZone, lastTime }
-    "CustomVoice",     -- My Voice: { persona, openers, closers, wordSwaps, phraseSwaps, battleCries, guildGreeting }
+    "CustomVoice",     -- My Voice: { persona, oaths, wordSwaps, phraseSwaps, battleCries, guildGreeting }
 }
 
 ---------------------------------------------------------------------------
@@ -277,7 +284,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.2"
+Engine.VERSION = "0.1.3"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -996,7 +1003,7 @@ end
 -- layered on top of everything else. Never mutates the static pack tables.
 ---------------------------------------------------------------------------
 
-local CV_MAX_ITEMS = 30        -- per list (openers, closers, battle cries, swaps)
+local CV_MAX_ITEMS = 30        -- per list (oaths, battle cries, swaps)
 local CV_MAX_TEXT = 120        -- bytes per line / swap value
 local CV_MAX_KEY = 40          -- bytes per swap trigger
 local CV_HEADER = "MONO1:"
@@ -1034,7 +1041,7 @@ local CV_DIALECT_STRENGTHS = { LIGHT = true, CLEAN = true }
 local CV_MAX_NAME = 40
 
 local function CVNewTable()
-    return { openers = {}, closers = {}, wordSwaps = {}, phraseSwaps = {}, battleCries = {}, raceStances = {} }
+    return { oaths = {}, wordSwaps = {}, phraseSwaps = {}, battleCries = {}, raceStances = {} }
 end
 
 -- Cross-race stances, from friendliest to coldest (labels live in Monologue_UI.lua)
@@ -1055,11 +1062,32 @@ function Engine:GetCustomVoice()
         cv = CVNewTable()
         MonologueCharDB.CustomVoice = cv
     end
-    for _, key in ipairs({ "openers", "closers", "wordSwaps", "phraseSwaps", "battleCries", "raceStances" }) do
+    for _, key in ipairs({ "oaths", "wordSwaps", "phraseSwaps", "battleCries", "raceStances" }) do
         if type(cv[key]) ~= "table" then cv[key] = {} end
     end
+    -- Old openers and closers (before 0.1.3) become oaths: "By Magni's beard," and
+    -- ", by Magni's beard!" both turn into "By Magni's beard!"
+    for _, oldKey in ipairs({ "openers", "closers", "suffixes" }) do
+        if type(cv[oldKey]) == "table" then
+            for _, line in ipairs(cv[oldKey]) do
+                if type(line) == "string" then
+                    line = strtrim((line:gsub("^[%s,;:]+", ""):gsub("[%s,;:]+$", "")))
+                    if line:find("%a") and #cv.oaths < CV_MAX_ITEMS then
+                        line = line:sub(1, 1):upper() .. line:sub(2)
+                        if not line:find("[%.!%?]$") then line = line .. "!" end
+                        local duplicate = false
+                        for _, existing in ipairs(cv.oaths) do
+                            if type(existing) == "string" and existing:lower() == line:lower() then duplicate = true end
+                        end
+                        if not duplicate then cv.oaths[#cv.oaths + 1] = line end
+                    end
+                end
+            end
+        end
+        cv[oldKey] = nil
+    end
     -- Lists: keep only non-empty strings, in order (also closes any holes)
-    for _, key in ipairs({ "openers", "closers", "battleCries" }) do
+    for _, key in ipairs({ "oaths", "battleCries" }) do
         local clean = {}
         for _, line in ipairs(cv[key]) do
             if type(line) == "string" and line ~= "" then clean[#clean + 1] = line end
@@ -1100,7 +1128,7 @@ function Engine:HasCustomVoice()
         if cv[key] ~= nil then return true end
     end
     return cv.persona ~= nil or cv.guildGreeting ~= nil or cv.racePreset ~= nil
-        or next(cv.raceStances or {}) ~= nil or #(cv.openers or {}) > 0
+        or next(cv.raceStances or {}) ~= nil or #(cv.oaths or cv.openers or {}) > 0
         or #(cv.closers or {}) > 0 or #(cv.battleCries or {}) > 0
         or next(cv.wordSwaps or {}) ~= nil or next(cv.phraseSwaps or {}) ~= nil
 end
@@ -1120,12 +1148,12 @@ local function ApplyCustomVoice(merged, cv)
     local used = false
 
     local dialect = type(merged.Dialect) == "table" and merged.Dialect or {}
-    if #cv.openers > 0 then
-        dialect.openers = CVAppendList(dialect.openers, cv.openers)
-        used = true
-    end
-    if #cv.closers > 0 then
-        dialect.closers = CVAppendList(dialect.closers, cv.closers)
+    -- My Oaths: usable in every moment (the "Any" group)
+    if type(cv.oaths) == "table" and #cv.oaths > 0 then
+        local base = type(dialect.oaths) == "table" and dialect.oaths or {}
+        local oaths = { Greet = base.Greet, Fight = base.Fight, Hurt = base.Hurt }
+        oaths.Any = CVAppendList(#base > 0 and base or base.Any, cv.oaths)
+        dialect.oaths = oaths
         used = true
     end
     for _, swapKey in ipairs({ "wordSwaps", "phraseSwaps" }) do
@@ -1162,7 +1190,7 @@ end
 -- Mutators used by the My Voice tab. Each returns ok, message and rebuilds the profile.
 function Engine:CustomVoiceAddLine(listKey, text)
     local cv = self:GetCustomVoice()
-    if not cv or (listKey ~= "openers" and listKey ~= "closers" and listKey ~= "battleCries") then
+    if not cv or (listKey ~= "oaths" and listKey ~= "battleCries") then
         return false, "bad list"
     end
     text = CVCleanText(text, CV_MAX_TEXT)
@@ -1321,8 +1349,7 @@ function Engine:ExportCustomVoice()
         records[#records + 1] = "s:" .. CVEncode(race) .. "=" .. CVEncode(cv.raceStances[race])
     end
     if cv.guildGreeting then records[#records + 1] = "g:" .. CVEncode(cv.guildGreeting) end
-    for _, line in ipairs(cv.openers) do records[#records + 1] = "o:" .. CVEncode(line) end
-    for _, line in ipairs(cv.closers) do records[#records + 1] = "c:" .. CVEncode(line) end
+    for _, line in ipairs(cv.oaths) do records[#records + 1] = "v:" .. CVEncode(line) end
     for _, line in ipairs(cv.battleCries) do records[#records + 1] = "b:" .. CVEncode(line) end
     local function addSwaps(tag, swaps)
         local keys = {}
@@ -1359,7 +1386,9 @@ local function CVParseString(str)
     if not body:find("%a:") then return nil, "That voice string is empty: there is nothing to import." end
 
     local cv = CVNewTable()
-    local lists = { o = cv.openers, c = cv.closers, b = cv.battleCries }
+    -- v = oaths; o / c are openers and closers from older strings, turned into oaths later
+    cv.openers = {}
+    local lists = { v = cv.oaths, o = cv.openers, c = cv.openers, b = cv.battleCries }
     for record in (body .. ";"):gmatch("([^;]*);") do
         if record ~= "" then
             local tag, value = record:match("^(%a):(.*)$")
@@ -1459,6 +1488,7 @@ end
 
 Tune.IDENTITY_OPENER_CHANCE = 0.30  -- share of pull lines taken from race/clan/allegiance openers
 Tune.IDENTITY_GREET_SHARE = 0.25    -- share of friendly greetings taken from clan/allegiance lines
+Tune.MY_GUILD_GREET_SHARE = 0.75    -- guildmate greetings that use your own (My Voice) guild greeting when a guild pack also has lines
 Tune.ALLEGIANCE_HOSTILE_SHARE = 0.6 -- when both exist, allegiance foe lines win this often
 Tune.IDLE_CHANCE = 0.12             -- per out-of-combat ability press (x chattiness)
 Tune.IDLE_COOLDOWN = 900            -- at least 15 min between idle lines
@@ -1690,7 +1720,7 @@ function Engine:PickIdentityPool(kind)
     return self:PickLayeredPool(kind)
 end
 
--- Layer flavor (openers, closers, word swaps) for the translator: about 30% of lines take
+-- Layer flavor (word swaps) for the translator: about 30% of lines take
 -- one from your allegiance, upbringing or traits
 Tune.LAYER_FLAVOR_CHANCE = 0.3
 function Engine:PickLayerFlavor()
@@ -1923,9 +1953,11 @@ function Engine:TryKillLine()
     if not pool then return end
     self.State.SpeakKind = "party"
     self.State.BareLine = true
+    self.State.OathMoment = "Kill"
     local ok, spoke = pcall(self.ProcessTrigger, self, Tune.IDENTITY_MOMENT_TIER, deckKey, pool, Tune.KILL_CHANCE, nil)
     self.State.SpeakKind = nil
     self.State.BareLine = nil
+    self.State.OathMoment = nil
     if ok and spoke then self.State.KillLineAt = now end
 end
 
@@ -2465,16 +2497,15 @@ function Engine:DescribeIdentity()
 end
 
 -- Applies one race Presets entry onto the merged profile (a private copy). A preset may
--- define: name, dialectIntensity (-1..+1 shift of the intensity tier), openers, closers
--- (replace the race lists), FriendGreetings (merged per pool) and BattleCry (replaces).
+-- define: name, dialectIntensity (-1..+1 shift of the intensity tier), oaths (replace the
+-- race's), FriendGreetings (merged per pool) and BattleCry (replaces).
 local function ApplyRacePreset(merged, raceData, presetKey)
     local presets = type(raceData.Presets) == "table" and raceData.Presets or nil
     local preset = presets and presetKey and presets[presetKey]
     if type(preset) ~= "table" or presetKey == "Default" then return nil end
 
     if type(merged.Dialect) ~= "table" then merged.Dialect = {} end
-    if type(preset.openers) == "table" and #preset.openers > 0 then merged.Dialect.openers = DeepCopy(preset.openers) end
-    if type(preset.closers) == "table" and #preset.closers > 0 then merged.Dialect.closers = DeepCopy(preset.closers) end
+    if type(preset.oaths) == "table" and next(preset.oaths) ~= nil then merged.Dialect.oaths = DeepCopy(preset.oaths) end
     if type(preset.FriendGreetings) == "table" then
         merged.FriendGreetings = DeepMerge(type(merged.FriendGreetings) == "table" and merged.FriendGreetings or {}, preset.FriendGreetings)
     end
@@ -2536,8 +2567,7 @@ function Engine:FillStarterExamples()
     local cv = self:GetCustomVoice()
     if not cv then return 0 end
     local starters = {
-        openers = { "Hear me out,", "Mark my words," },
-        closers = { ", so I say.", ", and that's the truth of it." },
+        oaths = { "Mark my words!", "By my honor!" },
         battleCries = { "For my friends, and for my honor!" },
     }
     local added = 0
@@ -2815,6 +2845,8 @@ end
 -- Returns true when a line in the given cooldown category may be spoken now
 function Engine:CanSpeak(categoryKey)
     if not MonologueDB or not MonologueDB.enabled then return false, "disabled" end
+    -- Out of character (keybind, /mono ooc): only a deliberate Greet still speaks
+    if MonologueDB.outOfCharacter and not self.State.ExplicitLine then return false, "ooc" end
 
     if MonologueRPBridge and MonologueRPBridge.IsPlayerIC then
         local ok, isIC = pcall(MonologueRPBridge.IsPlayerIC, MonologueRPBridge)
@@ -4035,6 +4067,15 @@ function Engine:GetGuildGreetingPool(unit)
     -- No guild pack: still allow GuildGreetings.Standard (e.g. a My Voice guild greeting)
     local guild = type(profile.Guild) == "table" and profile.Guild or {}
 
+    -- Your own guild greeting (My Voice tab) comes first, most of the time; with no guild
+    -- pack, every time
+    local cv = MonologueCharDB and MonologueCharDB.CustomVoice
+    local own = type(cv) == "table" and type(cv.guildGreeting) == "string" and cv.guildGreeting ~= "" and cv.guildGreeting
+    if own and (not (UsablePool(guild.mottos) or type(guild.rankGreetings) == "table")
+        or math.random() < Tune.MY_GUILD_GREET_SHARE) then
+        return "Guild_MyVoice", { own }, true
+    end
+
     if UsablePool(guild.mottos) and math.random() < GUILD_MOTTO_CHANCE then
         return "Guild_Motto", guild.mottos, true
     end
@@ -4296,8 +4337,11 @@ function Engine:HandleFriendlyTarget()
     if not pool then return end
 
     self.State.SpeakKind = "greeting"
-    local spoke = self:ProcessTrigger(5, categoryKey, pool, chance, "target")
+    self.State.OathMoment = "Greet"
+    local okTrigger, spoke = pcall(self.ProcessTrigger, self, 5, categoryKey, pool, chance, "target")
     self.State.SpeakKind = nil
+    self.State.OathMoment = nil
+    spoke = okTrigger and spoke
     if spoke then
         greeted[who] = now
     end
@@ -4317,25 +4361,32 @@ function Engine:PickGreeting(unit)
         end
     end
 
-    -- A dedicated friend note (Duo, TaraPage, ...) wins; otherwise a cross-race stance for the
-    -- target's race beats the friend's race/Default greeting and the guild and race pools
-    if not (pool and categoryKey and categoryKey:find("^Friend_Note_")) then
-        local stanceKey, stancePool = self:GetStanceGreetingPool(unit)
-        if stancePool then
-            categoryKey, pool, chance = stanceKey, stancePool, FRIEND_GREET_CHANCE
-        end
-    end
-
-    if not pool and type(self.ActiveProfile.Guild) == "table" and IsInGuild() then
+    -- Guildmates: your own guild greeting (My Voice), a rank greeting or a guild motto. These
+    -- work with or without a guild pack, and beat race and stance greetings; only a marked
+    -- friend's greeting comes first.
+    local guildSpecific = false
+    if not pool and IsInGuild() then
         local myGuild = Clean(GetGuildInfo("player"))
         local theirGuild = Clean(GetGuildInfo(unit))
         if myGuild and myGuild == theirGuild then
             local key, guildPool, specific = self:GetGuildGreetingPool(unit)
             if guildPool and specific then
-                categoryKey, pool, chance = key, guildPool, GUILD_GREET_CHANCE
+                categoryKey, pool, chance = key, guildPool,
+                    (key == "Guild_MyVoice") and FRIEND_GREET_CHANCE or GUILD_GREET_CHANCE
+                guildSpecific = true
             elseif guildPool then
                 fallbackKey, fallbackPool = key, guildPool
             end
+        end
+    end
+
+    -- A dedicated friend note (Duo, TaraPage, ...) or a guildmate greeting wins; otherwise a
+    -- cross-race stance for the target's race beats the friend's race/Default greeting and
+    -- the race pools
+    if not guildSpecific and not (pool and categoryKey and categoryKey:find("^Friend_Note_")) then
+        local stanceKey, stancePool = self:GetStanceGreetingPool(unit)
+        if stancePool then
+            categoryKey, pool, chance = stanceKey, stancePool, FRIEND_GREET_CHANCE
         end
     end
 
@@ -4360,11 +4411,59 @@ function Engine:PickGreeting(unit)
     end
 
     -- Now and then a clan or allegiance greeting instead (never over a dedicated friend note)
-    if pool and not categoryKey:find("^Friend_Note_") and math.random() < Tune.IDENTITY_GREET_SHARE then
+    if pool and not categoryKey:find("^Friend_Note_") and categoryKey ~= "Guild_MyVoice"
+        and math.random() < Tune.IDENTITY_GREET_SHARE then
         local idKey, idPool = self:PickIdentityPool("Greet")
         if idPool then categoryKey, pool = idKey, idPool end
     end
     return categoryKey, pool, chance
+end
+
+-- In character / out of character (keybind, /mono ic, /mono ooc). Out of character: typed chat
+-- is not translated and automatic lines stay quiet; Greet and Battle Cry still work.
+function Engine:SetInCharacter(inCharacter)
+    if not MonologueDB then return end
+    MonologueDB.outOfCharacter = not inCharacter
+    if not inCharacter then self.State.Pending = nil end
+    Print(inCharacter and "|cff00ff00In character.|r Translation and lines are on."
+        or "|cffaaaaaaOut of character.|r No translation, no automatic lines (Greet and Battle Cry still work).")
+    if MonologueUI and MonologueUI.UpdateMinimapState then pcall(MonologueUI.UpdateMinimapState, MonologueUI) end
+end
+
+function Engine:ToggleInCharacter()
+    if not MonologueDB then return end
+    self:SetInCharacter(MonologueDB.outOfCharacter == true)
+end
+
+-- Words Never Translated (account-wide, My Voice tab and /mono keep)
+local KEEP_MAX_WORDS, KEEP_MAX_BYTES = 50, 40
+function Engine:AddKeepWord(word)
+    if not MonologueDB then return false end
+    word = type(word) == "string" and strtrim((word:gsub("[%c|]", " "))) or ""
+    if word == "" or not word:find("%w") then return false, "Type a word or name first." end
+    if #word > KEEP_MAX_BYTES then return false, "That is too long (" .. KEEP_MAX_BYTES .. " letters at most)." end
+    if type(MonologueDB.keepWords) ~= "table" then MonologueDB.keepWords = {} end
+    local list = MonologueDB.keepWords
+    for _, existing in ipairs(list) do
+        if type(existing) == "string" and existing:lower() == word:lower() then return false, "Already on the list." end
+    end
+    if #list >= KEEP_MAX_WORDS then return false, "The list is full (" .. KEEP_MAX_WORDS .. ")." end
+    list[#list + 1] = word
+    if MonologueUI and MonologueUI.OnVoiceChanged then pcall(MonologueUI.OnVoiceChanged, MonologueUI) end
+    return true
+end
+
+function Engine:RemoveKeepWord(word)
+    local list = MonologueDB and MonologueDB.keepWords
+    if type(list) ~= "table" or type(word) ~= "string" then return false end
+    for i, existing in ipairs(list) do
+        if type(existing) == "string" and existing:lower() == word:lower() then
+            table.remove(list, i)
+            if MonologueUI and MonologueUI.OnVoiceChanged then pcall(MonologueUI.OnVoiceChanged, MonologueUI) end
+            return true
+        end
+    end
+    return false
 end
 
 -- Greet button, keybind and /mono greet (all real key presses or clicks). Says a waiting
@@ -4397,7 +4496,12 @@ function Engine:GreetNow()
     if not line then return false end
     -- A deliberate greeting: don't make the player wait out the automatic breath lock
     self.Cooldowns.GlobalBreath = 0
-    local ok = self:Speak(line, "SAY", "target", { key = "Greet_Manual", duration = 2 }, nil, true)
+    self.State.OathMoment = "Greet"
+    self.State.ExplicitLine = true
+    local okSpeak, ok = pcall(self.Speak, self, line, "SAY", "target", { key = "Greet_Manual", duration = 2 }, nil, true)
+    self.State.OathMoment = nil
+    self.State.ExplicitLine = nil
+    ok = okSpeak and ok
     if ok and who then greeted[who] = GetTime() end
     return ok
 end
@@ -4522,7 +4626,9 @@ function Engine:BattleCry(channelOverride)
     if MonologueTranslator and MonologueTranslator.Translate then
         local intensity = MonologueTranslator.GetChannelIntensity
             and MonologueTranslator:GetChannelIntensity(chatType) or (MonologueDB.translationIntensity or 0)
+        self.State.OathMoment = "Cry"
         local ok, translated = pcall(MonologueTranslator.Translate, MonologueTranslator, text, intensity)
+        self.State.OathMoment = nil
         if ok and type(translated) == "string" then text = translated end
     end
 
@@ -4569,6 +4675,16 @@ end
 Tune.SITUATION_DEATH_WINDOW = 600    -- AfterDeath: first lines within 10 min of dying
 Tune.SITUATION_REVENGE_WINDOW = 1800 -- Revenge: the creature that killed you, within 30 min
 Tune.SITUATION_LEVEL_WINDOW = 300    -- AfterLevelUp: within 5 min of the ding
+-- Everyday moments (situations/Moments.lua): chance per moment and seconds before it repeats
+Tune.MOMENTS = {
+    EatDrink = { chance = 0.25, cooldown = 600 },
+    Mount = { chance = 0.15, cooldown = 900 },
+    Rest = { chance = 0.40, cooldown = 1800 },
+    AllyDown = { chance = 0.50, cooldown = 120 },
+}
+Tune.MAX_COMBAT_LINES = 2           -- repeat guard: fight lines (pull, signature, big cooldown) per fight
+Tune.SAME_TARGET_GAP = 600           -- repeat guard: seconds before the same creature/player gets another pull line
+Tune.SPEECH_HURT_FRACTION = 0.35    -- speech effects: shaky below this much health in a fight
 Tune.SITUATION_DRUNK_WINDOW = 900    -- Drunk: 15 min after the last "You feel drunk" (or until sober)
 Tune.GRIND_STREAK_START = 5          -- GrindStreak: the 5th pull of one creature in this zone...
 Tune.GRIND_STREAK_STEP = 5           -- ...then every 5 more
@@ -4817,12 +4933,14 @@ function Engine:NoteDrunkMessage(message)
     local sober = Clean(DRUNK_MESSAGE_SELF1) or "You feel sober again."
     if message == sober then
         self:GetRecent().drunkAt = nil
+        self:GetRecent().drunkLevel = nil
         return true
     end
     for i = 2, 4 do
         local text = Clean(_G["DRUNK_MESSAGE_SELF" .. i]) or DRUNK_FALLBACKS[i - 1]
         if message == text then
             self:GetRecent().drunkAt = GetTime()
+            self:GetRecent().drunkLevel = i - 1   -- 1 tipsy, 2 drunk, 3 completely smashed
             return true
         end
     end
@@ -4840,6 +4958,21 @@ local function Fraction(current, maximum)
     current, maximum = Clean(current), Clean(maximum)
     if type(current) ~= "number" or type(maximum) ~= "number" or maximum <= 0 then return nil end
     return current / maximum
+end
+
+-- For the translator's speech effects: drunk = 0 (sober) to 3 (completely smashed), hurt =
+-- below Tune.SPEECH_HURT_FRACTION health in a fight
+function Engine:GetSpeechState()
+    local state = { drunk = 0, hurt = false }
+    local recent = self:GetRecent()
+    if recent.drunkAt and GetTime() - recent.drunkAt <= Tune.SITUATION_DRUNK_WINDOW then
+        state.drunk = recent.drunkLevel or 1
+    end
+    if UnitAffectingCombat("player") then
+        local fraction = Fraction(UnitHealth("player"), UnitHealthMax("player"))
+        state.hurt = fraction ~= nil and fraction > 0 and fraction < Tune.SPEECH_HURT_FRACTION
+    end
+    return state
 end
 
 -- Every situation that applies right now, most specific first:
@@ -5205,7 +5338,9 @@ function Engine:HandlePlayerHealth()
             local classPool = type(reactions) == "table" and reactions.Tier3_LowHP or nil
             local deckKey, pool = self:PickLayeredPool("LowHP", "Spell_Tier3_LowHP", classPool, "low health")
             if pool then
-                self:ProcessTrigger(REACTION_TIERS.Tier3_LowHP, deckKey, pool, REACTION_CHANCE.Tier3_LowHP, nil)
+                self.State.OathMoment = "LowHP"
+                pcall(self.ProcessTrigger, self, REACTION_TIERS.Tier3_LowHP, deckKey, pool, REACTION_CHANCE.Tier3_LowHP, nil)
+                self.State.OathMoment = nil
             end
         end
     elseif ratio >= LOW_HP_REARM then
@@ -5534,6 +5669,42 @@ function Engine:ResolveSpellPool(name, entry, unit)
     return nil
 end
 
+-- Repeat guards for fight lines (pull, signature and big-cooldown lines): at most
+-- Tune.MAX_COMBAT_LINES per fight, each move once per fight, and a pull line for the same
+-- creature or player at most once per Tune.SAME_TARGET_GAP seconds. Low-health and kill
+-- lines are not counted. Returns true, or false and the reason.
+function Engine:FightLineAllowed(spellName, targetUnit, isPull)
+    local state = self.State
+    if (state.CombatLines or 0) >= Tune.MAX_COMBAT_LINES then
+        return false, (state.CombatLines or 0) .. " lines already this fight"
+    end
+    if spellName and state.SpellsSaid and state.SpellsSaid[spellName] then
+        return false, spellName .. " already spoke this fight"
+    end
+    if isPull and targetUnit then
+        local guid = Clean(UnitGUID(targetUnit))
+        local at = guid and state.SpokeToGUID and state.SpokeToGUID[guid]
+        if at and GetTime() - at < Tune.SAME_TARGET_GAP then return false, "already spoke to this target" end
+    end
+    return true
+end
+
+function Engine:NoteFightLine(spellName, targetUnit)
+    local state = self.State
+    state.CombatLines = (state.CombatLines or 0) + 1
+    state.SpellsSaid = state.SpellsSaid or {}
+    if spellName then state.SpellsSaid[spellName] = true end
+    local guid = targetUnit and Clean(UnitGUID(targetUnit))
+    if guid then
+        local now = GetTime()
+        state.SpokeToGUID = state.SpokeToGUID or {}
+        for key, at in pairs(state.SpokeToGUID) do
+            if now - at >= Tune.SAME_TARGET_GAP then state.SpokeToGUID[key] = nil end
+        end
+        state.SpokeToGUID[guid] = now
+    end
+end
+
 function Engine:SayPullLine(targetUnit, spellID, hardware)
     local state = self.State
     local categoryKey = "Pull_Speech"
@@ -5549,6 +5720,11 @@ function Engine:SayPullLine(targetUnit, spellID, hardware)
         return false
     end
     local name, entry = self:GetSignatureEntry(spellID)
+    local allowed, why = self:FightLineAllowed(name, targetUnit, true)
+    if not allowed then
+        self:Debug("pull line skipped: " .. why)
+        return false
+    end
     local deckKey, pool, source
     if name then deckKey, pool, source = self:ResolveSpellPool(name, entry, targetUnit) end
     if not pool then return false end
@@ -5556,6 +5732,7 @@ function Engine:SayPullLine(targetUnit, spellID, hardware)
     self.State.CurrentSpell = name
     local spoke = self:SayPullLineFrom(targetUnit, hardware, categoryKey, deckKey, pool, source)
     self.State.CurrentSpell = nil
+    if spoke then self:NoteFightLine(name, targetUnit) end
     return spoke
 end
 
@@ -5629,6 +5806,81 @@ end
 --   SpellTriggers = { [spellID] = "Tier1_MajorCD" | "Tier2_Routine" }
 -- Unmapped casts in combat against a hostile target roll for Tier2_Routine.
 -- Spell IDs are rank-specific: list every rank of a ranked spell.
+---------------------------------------------------------------------------
+-- Everyday moments: eating or drinking, mounting up, walking into an inn or city, a party
+-- member falling. Lines from ActiveProfile.Moments, else Data.MomentLines. Said as bare
+-- lines (no oath), on the cast press when there is one, else as background speech.
+---------------------------------------------------------------------------
+
+local EAT_DRINK_SPELLS = { food = true, drink = true, refreshment = true, ["food & drink"] = true }
+
+function Engine:SayMoment(moment, hardware, name)
+    if not MonologueDB or MonologueDB.momentLines == false then return false end
+    local own = type(self.ActiveProfile.Moments) == "table" and self.ActiveProfile.Moments[moment] or nil
+    local pool = UsablePool(own) and own or (self.Data.MomentLines and self.Data.MomentLines[moment])
+    local settings = Tune.MOMENTS[moment]
+    if not UsablePool(pool) or not settings then return false end
+    local categoryKey = "Moment_" .. moment
+    self.State.BareLine = true
+    self.State.TokenTargetName = name
+    local ok, spoke = pcall(self.ProcessTrigger, self, Tune.IDENTITY_MOMENT_TIER, categoryKey, pool,
+        settings.chance, nil, nil, nil, hardware)
+    self.State.BareLine = nil
+    self.State.TokenTargetName = nil
+    if ok and spoke then
+        self.Cooldowns.Categories[categoryKey] = GetTime() + settings.cooldown
+        return true
+    end
+    return false
+end
+
+-- A cast that is an everyday moment (food, drink, a mount). Returns true when it spoke.
+function Engine:TryEverydayMoment(spellID, hardware)
+    if not MonologueDB or MonologueDB.momentLines == false then return false end
+    local name = GetSpellNameSafe(spellID)
+    if type(name) ~= "string" then return false end
+    if EAT_DRINK_SPELLS[name:lower()] then
+        return self:SayMoment("EatDrink", hardware)
+    end
+    if C_MountJournal and C_MountJournal.GetMountFromSpell then
+        local ok, mountID = pcall(C_MountJournal.GetMountFromSpell, spellID)
+        local inInstance = Clean((IsInInstance()))
+        if ok and Clean(mountID) and not inInstance then
+            return self:SayMoment("Mount", hardware)
+        end
+    end
+    return false
+end
+
+-- PLAYER_UPDATE_RESTING: walking into an inn or a city. The first reading after login is silent.
+function Engine:HandleRestingChanged()
+    local resting = Clean(IsResting()) and true or false
+    local was = self.State.WasResting
+    self.State.WasResting = resting
+    if was == nil or not resting or was then return end
+    if UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then return end
+    self:SayMoment("Rest", nil)
+end
+
+-- UNIT_HEALTH for party1-4: a party member who just died (not feigning)
+function Engine:CheckAllyDown(unit)
+    if type(unit) ~= "string" or not unit:find("^party%d$") or not UnitExists(unit) then return end
+    local guid = Clean(UnitGUID(unit))
+    if not guid then return end
+    self.State.AllyDead = self.State.AllyDead or {}
+    local dead = UnitIsDeadOrGhost(unit) and not (UnitIsFeignDeath and UnitIsFeignDeath(unit))
+    dead = Clean(dead) and true or false
+    local was = self.State.AllyDead[guid]
+    self.State.AllyDead[guid] = dead
+    -- Only the change from alive to dead counts (the first reading of a member is silent)
+    if was == nil or was or not dead then return end
+    if UnitIsDeadOrGhost("player") then return end
+    local name = ShortName(Clean(UnitName(unit)))
+    if not name then return end
+    self:Debug("party: " .. name .. " died")
+    self:SayMoment("AllyDown", nil, name)
+end
+
 -- Called from UNIT_SPELLCAST_SENT, so everything here comes straight from a player action
 -- (a hardware event) and may use SAY/YELL.
 --
@@ -5673,6 +5925,9 @@ function Engine:HandleSpellcast(spellID, hardware)
 
     local sigName, sigEntry = self:GetSignatureEntry(spellID)
 
+    -- Everyday moments: food, drink, a mount (out of combat)
+    if not inCombat and not sigName and self:TryEverydayMoment(spellID, castRoute) then return end
+
     -- A known rival gets called out by name (signature moves only; see TryRivalOpener)
     if hostileTarget and self:TryRivalOpener(spellID, castRoute, sigName) then return end
 
@@ -5700,15 +5955,21 @@ function Engine:HandleSpellcast(spellID, hardware)
     -- Mid-fight: a big cooldown may speak on its own; against players any signature move may
     local deckKey, pool = self:ResolveSpellPool(sigName, sigEntry, targetUnit)
     if not pool or not inCombat then return end
-    if sigEntry.big then
-        self.State.CurrentSpell = sigName
-        self:ProcessTrigger(1, deckKey, pool, BIG_SPELL_CHANCE, targetUnit, nil, "SAY", castRoute)
-        self.State.CurrentSpell = nil
-    elseif hostileTarget and not mobTarget then
-        self.State.CurrentSpell = sigName
-        self:ProcessTrigger(2, deckKey, pool, PVP_SPELL_CHANCE, targetUnit, nil, "SAY", castRoute)
-        self.State.CurrentSpell = nil
+    if not (sigEntry.big or (hostileTarget and not mobTarget)) then return end
+    local allowed, why = self:FightLineAllowed(sigName, targetUnit, false)
+    if not allowed then
+        self:Debug("signature line skipped: " .. why)
+        return
     end
+    local spoke
+    self.State.CurrentSpell = sigName
+    if sigEntry.big then
+        spoke = self:ProcessTrigger(1, deckKey, pool, BIG_SPELL_CHANCE, targetUnit, nil, "SAY", castRoute)
+    else
+        spoke = self:ProcessTrigger(2, deckKey, pool, PVP_SPELL_CHANCE, targetUnit, nil, "SAY", castRoute)
+    end
+    self.State.CurrentSpell = nil
+    if spoke then self:NoteFightLine(sigName, targetUnit) end
 end
 
 ---------------------------------------------------------------------------
@@ -5829,6 +6090,14 @@ function Engine:HandleAbilityPress(spellID, source)
     if not isSignature then
         if since < gap then return end
         state.PressSource = "press:" .. placeOrReason
+        -- Everyday moments first: food, drink, a mount
+        local okMoment, spokeMoment = pcall(self.TryEverydayMoment, self, spellID, true)
+        if okMoment and spokeMoment then
+            state.PressSource = nil
+            state.LastPressLineAt = now
+            state.PressQuietLogged = false
+            return
+        end
         local okIdle, spokeIdle = pcall(self.TryIdleLine, self, true)
         state.PressSource = nil
         if not okIdle then
@@ -5953,6 +6222,16 @@ SafeRegisterEvent(frame, "CHAT_MSG_ADDON")
 SafeRegisterEvent(frame, "CHAT_MSG_SAY")
 SafeRegisterEvent(frame, "CHAT_MSG_YELL")
 SafeRegisterEvent(frame, "CHAT_MSG_EMOTE")
+-- Everyday moments: resting (inn or city) and a party member falling
+SafeRegisterEvent(frame, "PLAYER_UPDATE_RESTING")
+do
+    local allyFrame = CreateFrame("Frame")
+    SafeRegisterEvent(allyFrame, "UNIT_HEALTH")
+    allyFrame:SetScript("OnEvent", function(_, _, unit)
+        if type(unit) ~= "string" or unit:sub(1, 5) ~= "party" or not MonologueDB then return end
+        if unit:find("^party%d$") then pcall(Engine.CheckAllyDown, Engine, unit) end
+    end)
+end
 
 unitFrame:RegisterUnitEvent("UNIT_HEALTH", "player", "target", "mouseover")
 -- UNIT_SPELLCAST_SENT fires as the player's cast is sent, i.e. during their own key press or
@@ -5986,6 +6265,12 @@ frame:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_LOGIN" then
         if not MonologueDB or not MonologueCharDB then Engine:InitializeDB() end
+        Engine.State.WasResting = Clean(IsResting()) and true or false
+        if MonologueDB and MonologueDB.outOfCharacter then
+            C_Timer.After(8, function()
+                Print("|cffaaaaaaYou're out of character|r (no translation, no automatic lines). /mono ic or the keybind turns it back on.")
+            end)
+        end
         Engine.State.InEncounter = (IsEncounterInProgress and IsEncounterInProgress()) and true or false
         Engine:UpdateRestrictionState()
         Engine:BuildActiveProfile()
@@ -6072,7 +6357,13 @@ frame:SetScript("OnEvent", function(_, event, ...)
         -- PLAYER_REGEN_ENABLED is a background event, and SendChatMessage from a background
         -- event raises ADDON_ACTION_BLOCKED. A held line waits for the next hardware action.
         wipe(Engine.State.EngagementCasts)
+        -- Repeat guards count per fight
+        Engine.State.CombatLines = 0
+        Engine.State.SpellsSaid = nil
         if MonologueDB and MonologueCharDB then pcall(Engine.OnCombatEndParty, Engine) end
+
+    elseif event == "PLAYER_UPDATE_RESTING" then
+        pcall(Engine.HandleRestingChanged, Engine)
 
     elseif event == "ENCOUNTER_START" then
         Engine.State.InEncounter = true
@@ -6284,7 +6575,7 @@ local function PrintStatus()
         .. " (guild: " .. tostring(ctx.guildName) .. "), profile=" .. tostring(ctx.profile)
         .. ", My Voice=" .. (ctx.customVoice and "|cff00ff00active|r" or "none"))
     if not Engine:HasCustomVoice() then
-        Print("|cff00ccffNew here?|r Type /mono, then open the |cffffd100My Voice|r tab to set your own openers, closers, swaps and battle cries in-game.")
+        Print("|cff00ccffNew here?|r Type /mono, then open the |cffffd100My Voice|r tab to set your own oaths, swaps and battle cries in-game.")
     end
     Print("Growth: level " .. tostring(ctx.level) .. " -> " .. tostring(ctx.arc) .. " (" .. tostring(ctx.stageKey) .. ")"
         .. " | Feats active: " .. ((ctx.feats and #ctx.feats > 0) and table.concat(ctx.feats, ", ") or "none"))
@@ -6370,8 +6661,10 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage("  /mono welcome - show the welcome card again   /mono version - show your version")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono castchat [retry] - show (or reset) places where the client blocked ability-press /s lines")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono greet - say hello to your friendly player target now (or say a waiting greeting)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono ic | ooc - in character (translate, speak) or out of character (also a keybind)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono keep <word> | unkeep <word> - words that are never translated (/mono keep lists them)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono lines - open the Voice Lines tab (where and how often /s lines are said)")
-    DEFAULT_CHAT_FRAME:AddMessage("  /mono voice - open the My Voice tab (custom openers, closers, swaps, battle cries, export/import)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono voice - open the My Voice tab (custom oaths, swaps, battle cries, export/import)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono roster - open the Rivals & Friends roster window")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono minimap [reset] - show or hide the minimap button (reset: default spot, shown)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono friend [note] - mark your friendly target as a friend (or update their note)")
@@ -6639,6 +6932,25 @@ SlashCmdList["MONOLOGUE"] = function(msg)
 
     elseif cmd == "greet" then
         Engine:GreetNow()
+
+    elseif cmd == "ic" then
+        Engine:SetInCharacter(true)
+
+    elseif cmd == "ooc" then
+        Engine:SetInCharacter(false)
+
+    elseif cmd == "keep" then
+        if arg and arg ~= "" then
+            local ok, why = Engine:AddKeepWord(arg)
+            Print(ok and ("'" .. arg .. "' will never be translated.") or why)
+        else
+            local list = type(MonologueDB.keepWords) == "table" and MonologueDB.keepWords or {}
+            Print(#list > 0 and ("Never translated: " .. table.concat(list, ", ")) or "No words on the never-translate list. /mono keep <word> adds one.")
+        end
+
+    elseif cmd == "unkeep" then
+        Print((arg and Engine:RemoveKeepWord(arg)) and ("'" .. arg .. "' removed from the never-translate list.")
+            or "Usage: /mono unkeep <word> (it must be on the list: /mono keep shows it)")
 
     elseif cmd == "lines" or cmd == "voicelines" then
         if MonologueUI and MonologueUI.OpenLines then

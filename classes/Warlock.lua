@@ -28,18 +28,6 @@ MonologueEngine.Data.Classes["WARLOCK"] = {
             ["feel the pain"] = { "taste the agony", "suffer for it" },
             ["as you wish"] = { "your will, my command", "it shall be so" },
         },
-        openers = {
-            "Pay attention,",
-            "Tell me,",
-            "Understand this,",
-            "Between pacts,",
-        },
-        closers = {
-            ", for a price.",
-            ", the shadows agree.",
-            ", so the pact reads.",
-            ", as always.",
-        },
     },
     SpellReactions = {
         Tier1_MajorCD = {
