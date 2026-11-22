@@ -604,4 +604,16 @@ MonologueEngine.Data.Races["Skyborne"] = {
             },
         },
     },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR ZEPHRAS!",
+        "RIDE THE STORM!",
+        "WINGS AND THUNDER!",
+        "THE SKY IS OURS!",
+        "FAIR WINDS, FOUL END!",
+        "INTO THE GALE!",
+        "THE TEMPEST ANSWERS!",
+        "SKYBORNE RISE!",
+    },
 }

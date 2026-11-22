@@ -230,9 +230,9 @@ MonologueEngine.Data.Races["Gnome"] = {
                 },
             },
             BattleCry = {
-                "Time for science!",
-                "It's going to be spectacular!",
-                "Behold, my greatest invention!",
+                "FOR SCIENCE!",
+                "SPROCKETS AND SPARKS!",
+                "FIELD TEST, GO!",
             },
         },
         DryWit = {
@@ -263,9 +263,9 @@ MonologueEngine.Data.Races["Gnome"] = {
                 },
             },
             BattleCry = {
-                "Well. Here we go.",
-                "This'll be fun, I'm sure.",
-                "Initiating regrettable decisions.",
+                "FINE! CHARGE!",
+                "FOR GNOMEREGAN, I SUPPOSE!",
+                "ONCE MORE, WITH FEELING!",
             },
         },
     },
@@ -467,5 +467,17 @@ MonologueEngine.Data.Races["Gnome"] = {
                 "Overspark keeps trying new cures on me.",
             },
         },
+    },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR GNOMEREGAN!",
+        "FOR MEKKATORQUE!",
+        "GEARS AND GLORY!",
+        "FULL STEAM AHEAD!",
+        "SPROCKETS UP!",
+        "FOR SCIENCE!",
+        "SHORT BUT DEADLY!",
+        "WE'LL TAKE IT BACK!",
     },
 }

@@ -80,3 +80,55 @@ Add("Elite", { "Big one. {party}, stay sharp.", "Tough one. Good thing I brought
 Add("Outlevelled", { "You're {levelgap}. I've had worse odds.", "{levelgap}, and I'm still here." })
 Add("Hurt", { "I'm {myhp}. Make this quick.", "{myhp}. Doesn't matter." })
 Add("LowMana", { "Barely any {resource} left.", "Running dry on {resource}." })
+
+---------------------------------------------------------------------------
+-- Spell context lines: when a signature move is used on a rare, an elite, an enemy player,
+-- while you're hurt, or in a group, the line usually comes from a matching pool. A class
+-- can write its own per spell (SpellLines["Charge"].Elite = {...}, see classes/Warrior.lua);
+-- these shared ones cover every other spell and class. {spell} = the move being used.
+---------------------------------------------------------------------------
+
+MonologueEngine.Data.SpellContextLines = {
+    Player = {
+        "{spell}, {target}. Nothing personal.",
+        "Wrong road, {target}.",
+        "{target}. Let's see what you've got.",
+        "Should've stayed in town, {target}.",
+        "{spell} first. Talk later, {target}.",
+        "I know your kind, {target}.",
+        "Easy now, {target}. This'll be quick.",
+        "You're a long way from home, {target}.",
+    },
+    Rare = {
+        "{mob}. I've heard about you.",
+        "Not every day you meet {mob}.",
+        "{mob}. You're worth the trouble.",
+        "So you're the {mob} they talk about.",
+        "{spell}, and a trophy after.",
+        "Don't you vanish on me, {mob}.",
+    },
+    Elite = {
+        "Big one. {spell} and hope.",
+        "{mob} is tough. Hit it hard.",
+        "Careful. This {mob} hits back.",
+        "Stay sharp. That {mob} is no pushover.",
+        "Steady now. This one's a brute.",
+        "{spell} won't be enough alone. Keep at it.",
+    },
+    Hurt = {
+        "{spell} on fumes. Fine.",
+        "I'm {myhp}, and still coming.",
+        "One more {spell}. Then bandages.",
+        "Bad time for this, {mob}.",
+        "Hurt or not, here I come.",
+        "Bleeding. Doesn't matter.",
+    },
+    Party = {
+        "With me, {party}.",
+        "{party}, I'll take the front.",
+        "Follow my lead, everyone.",
+        "Eyes on me, {party}. Going in.",
+        "I've got this one, {party}.",
+        "Pull's mine. Stay close, {party}.",
+    },
+}

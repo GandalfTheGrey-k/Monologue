@@ -396,3 +396,59 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
     },
     pvpStyle = "Frontline Brawler"
 }
+
+-- Context lines for the signature moves (used on a rare, an elite, an enemy player or in a
+-- group; see Data.SpellContextLines in situations/Details.lua for the shared ones)
+do
+    local lines = MonologueEngine.Data.Classes["WARRIOR"].SpellLines
+    lines["Charge"].Player = {
+        "Right at you, {target}.",
+        "You won't outrun a charge, {target}.",
+        "Brace, {target}. Here I come.",
+        "Running won't help, {target}.",
+        "{target}! Over here.",
+    }
+    lines["Charge"].Elite = {
+        "Big {mob}. Bigger charge.",
+        "Straight at the {mob}. No hesitating.",
+        "Always charge the big one.",
+        "Shield up. That {mob} hits hard.",
+    }
+    lines["Charge"].Rare = {
+        "{mob}! Don't you dare run.",
+        "Finally found you, {mob}.",
+        "Charging before it vanishes.",
+        "{mob}. Stay right there.",
+    }
+    lines["Charge"].Party = {
+        "Charging in, {party}. Follow.",
+        "I'll grab it, {party}. Hit what I hit.",
+        "Watch my back, {party}. Going in.",
+        "Pull's on me. Stay close.",
+    }
+    lines["Intercept"].Player = {
+        "You're not getting away, {target}.",
+        "Back here, {target}.",
+        "Running? Not from me, {target}.",
+        "Thought you were clear, {target}?",
+        "Not so fast, {target}.",
+    }
+    lines["Execute"].Player = {
+        "Done, {target}.",
+        "Should've run, {target}.",
+        "That's the end of you, {target}.",
+        "Good fight, {target}. Over now.",
+    }
+    lines["Execute"].Elite = {
+        "Down you go, big {mob}.",
+        "Finish the {mob}. Now.",
+        "Tough {mob}. Not tough enough.",
+        "That's the last swing, {mob}.",
+    }
+    lines["Execute"].Rare = {
+        "Trophy time, {mob}.",
+        "{mob}, you'll make a fine story.",
+        "That's the end of the legend, {mob}.",
+        "Rare kill. Remember this one.",
+    }
+end

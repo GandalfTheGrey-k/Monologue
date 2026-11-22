@@ -639,4 +639,16 @@ MonologueEngine.Data.Races["Dwarf"] = {
             },
         },
     },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR KHAZ MODAN!",
+        "BY MAGNI'S BEARD!",
+        "IRONFORGE STANDS!",
+        "STONE AN' STEEL!",
+        "FOR THE MOUNTAIN!",
+        "AXES HIGH!",
+        "NOT ONE STEP BACK!",
+        "KHAZ MODAN REMEMBERS!",
+    },
 }

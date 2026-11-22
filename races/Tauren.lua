@@ -487,4 +487,16 @@ MonologueEngine.Data.Races["Tauren"] = {
             },
         },
     },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR THE EARTH MOTHER!",
+        "FOR THE HERD!",
+        "FOR MULGORE!",
+        "STAND WITH THE HERD!",
+        "THUNDER BLUFF STANDS!",
+        "HORNS DOWN!",
+        "FOR CAIRNE!",
+        "THE PLAINS REMEMBER!",
+    },
 }

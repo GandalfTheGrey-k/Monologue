@@ -485,6 +485,71 @@ function Translator:HasDialect()
         or #compiled.interjections > 0
 end
 
+-- Noun / verb guard for word swaps. Swaps don't know grammar, so a few ambiguous words only
+-- swap where their replacement fits:
+--   NOUN_ONLY: replaced by nouns ("fight" -> "scrap", "drink" -> "pint"), so only swapped
+--              after a noun cue ("a fight", "the fight", "good drink"), never as a verb
+--              ("to fight back the Horde" stays "fight").
+--   VERB_ONLY: replaced by verbs ("hurry" -> "walk with purpose", "kill" -> "slay"), so never
+--              swapped right after a determiner ("in a hurry", "the kill").
+local NOUN_ONLY_SWAPS = {
+    fight = true, drink = true, work = true, fear = true, hope = true, plan = true, promise = true,
+    guard = true, storm = true, curse = true, fire = true, reward = true, balance = true, word = true,
+    quest = true, power = true, favor = true, spell = true,
+}
+local VERB_ONLY_SWAPS = {
+    attack = true, burn = true, track = true, win = true, heal = true, fix = true, fly = true,
+    freeze = true, shoot = true, sneak = true, steal = true, kill = true, pray = true, protect = true,
+    defend = true, hurry = true,
+}
+local DETERMINERS = {
+    a = true, an = true, the = true, this = true, that = true, these = true, those = true,
+    my = true, your = true, his = true, her = true, its = true, our = true, their = true,
+    ye = true, yer = true, me = false, no = true, every = true, each = true, another = true,
+    any = true, some = true, one = true,
+}
+local NOUN_CUES = {
+    good = true, great = true, big = true, bad = true, last = true, next = true, first = true,
+    real = true, fair = true, proper = true, little = true, long = true, hard = true, fine = true,
+    strong = true, cold = true, stiff = true, quick = true, honest = true, old = true, new = true,
+}
+
+-- May this word be swapped, given the word before it?
+local function SwapFitsGrammar(word, previous)
+    if NOUN_ONLY_SWAPS[word] then
+        return previous ~= nil and (DETERMINERS[previous] == true or NOUN_CUES[previous] == true)
+    end
+    if VERB_ONLY_SWAPS[word] then
+        return not (previous ~= nil and DETERMINERS[previous] == true)
+    end
+    return true
+end
+
+-- Your guild's name ("Clan BattleHammer"), matched in any letter case, is masked so no swap
+-- or accent rule touches it, even at the start of a line
+local function PreserveGuildName(text, preserve)
+    local name = GetGuildInfo and GetGuildInfo("player")
+    if MonologueEngine and MonologueEngine.Clean then name = MonologueEngine.Clean(name) end
+    if type(name) ~= "string" or #name < 3 then return text end
+    local pattern = name:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+        :gsub("%a", function(c) return "[" .. c:lower() .. c:upper() .. "]" end)
+    return (text:gsub(pattern, preserve))
+end
+
+-- A capitalised word in the middle of a sentence is a name (a player, a guild, a place, a
+-- boss) and stays as written. The first word of a sentence, "I" / "I'm" and ALL-CAPS words
+-- (shouts) are still translated.
+local function PreserveProperNouns(text, preserve)
+    return (text:gsub("()%f[%a](%u[%a']*)", function(position, word)
+        if not word:find("%l") then return nil end              -- ALL CAPS or a single capital
+        if word == "I" or word:find("^I'") then return nil end
+        local before = text:sub(1, position - 1):match("(%S?)%s*$")
+        -- Start of the line or of a sentence (also after a masked block, e.g. an emote)
+        if before == "" or before:find("[%.!%?:\"\002]") then return nil end
+        return preserve(word)
+    end))
+end
+
 function Translator:Translate(text, intensity, dialectOverride)
     if type(text) ~= "string" or text == "" then return text end
     intensity = math.floor(tonumber(intensity) or 0)
@@ -510,6 +575,11 @@ function Translator:Translate(text, intensity, dialectOverride)
         text = text:gsub(pattern, Preserve)
     end
 
+    -- Names stay as written: your guild's name anywhere in the line, and any capitalised word
+    -- in the middle of a sentence ("Clan BattleHammer", "Ironforge", "Magni")
+    text = PreserveGuildName(text, Preserve)
+    text = PreserveProperNouns(text, Preserve)
+
     -- Nothing in-character left to translate
     if not text:find("%a") then return original end
 
@@ -530,8 +600,13 @@ function Translator:Translate(text, intensity, dialectOverride)
         if okFlavor and type(picked) == "table" then flavor = picked end
     end
     if flavor and type(flavor.wordSwaps) == "table" then
+        local previousWord
         text = text:gsub("%a[%a']*", function(word)
-            local swap = flavor.wordSwaps[word:lower()]
+            local lowered = word:lower()
+            local previous = previousWord
+            previousWord = lowered
+            if not SwapFitsGrammar(lowered, previous) then return nil end
+            local swap = flavor.wordSwaps[lowered]
             if type(swap) == "table" then swap = swap[math.random(#swap)] end
             if type(swap) == "string" then return Preserve(MatchCase(word, swap)) end
             return nil
@@ -556,9 +631,12 @@ function Translator:Translate(text, intensity, dialectOverride)
 
     if useSwaps or usePhonetics then
         local source = text
+        local previousWord
         text = text:gsub("(%a[%a']*)()", function(word, nextPos)
             local lowered = word:lower()
             local following = source:sub(nextPos, nextPos)
+            local previous = previousWord
+            previousWord = lowered
 
             local function Swapped(entry, original_word)
                 local replacement = MatchCase(original_word, PickVariant(entry))
@@ -576,12 +654,12 @@ function Translator:Translate(text, intensity, dialectOverride)
 
             if useSwaps then
                 local entry = compiled.words[lowered]
-                if entry and Fires(entry) then
+                if entry and SwapFitsGrammar(lowered, previous) and Fires(entry) then
                     return MARK_SWAPPED .. Swapped(entry, word)
                 end
                 -- Contractions and possessives: "you're" -> "ye're", "friend's" -> "lad's"
                 local base, rest = lowered:match("^(%a+)('.*)$")
-                if base and compiled.words[base] and Fires(compiled.words[base]) then
+                if base and compiled.words[base] and SwapFitsGrammar(base, previous) and Fires(compiled.words[base]) then
                     return MARK_SWAPPED .. Swapped(compiled.words[base], word:sub(1, #base)) .. rest
                 end
             end

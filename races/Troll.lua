@@ -278,9 +278,9 @@ MonologueEngine.Data.Races["Troll"] = {
                 },
             },
             BattleCry = {
-                "Heh heh, here I come!",
+                "HERE COME DA TROLL!",
                 "Surprise, mon!",
-                "Da fun starts now!",
+                "DA PARTY START NOW!",
             },
         },
     },
@@ -500,5 +500,17 @@ MonologueEngine.Data.Races["Troll"] = {
                 "Once we rule everything, mon. Everything.",
             },
         },
+    },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "DARKSPEAR NEVER DIE!",
+        "FOR VOL'JIN!",
+        "DA LOA BE WIT' US!",
+        "DARKSPEAR RISE!",
+        "BWONSAMDI WAITIN'!",
+        "FOR DA HORDE, MON!",
+        "SPEARS UP!",
+        "DA JUNGLE TAKE DEM!",
     },
 }

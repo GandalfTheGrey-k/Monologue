@@ -264,7 +264,7 @@ MonologueEngine.Data.Races["Human"] = {
             BattleCry = {
                 "Time to bring in the harvest!",
                 "For hearth and home!",
-                "This'll be a bumper crop of trouble!",
+                "PITCHFORKS UP!",
             },
         },
     },
@@ -528,5 +528,17 @@ MonologueEngine.Data.Races["Human"] = {
                 "One day I'll walk those violet streets again.",
             },
         },
+    },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR THE ALLIANCE!",
+        "FOR STORMWIND!",
+        "FOR THE KING!",
+        "STAND FAST!",
+        "HOLD THE LINE!",
+        "FOR LORDAERON!",
+        "SHIELDS UP!",
+        "FORWARD, FOR AZEROTH!",
     },
 }

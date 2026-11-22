@@ -231,7 +231,7 @@ MonologueEngine.Data.Races["Scourge"] = {
             },
             BattleCry = {
                 "For the Dark Lady and for science!",
-                "Calculated, and deadly.",
+                "FOR THE ROYAL APOTHECARY!",
                 "Let the experiment proceed!",
             },
         },
@@ -467,5 +467,17 @@ MonologueEngine.Data.Races["Scourge"] = {
                 "Brill's patrol needs more guards.",
             },
         },
+    },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR THE DARK LADY!",
+        "FOR THE FORSAKEN!",
+        "DEATH TO THE LIVING!",
+        "WE ARE FREE!",
+        "THE GRAVE CAN WAIT!",
+        "VICTORY FOR SYLVANAS!",
+        "RISE AND FIGHT!",
+        "NO MASTERS!",
     },
 }

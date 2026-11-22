@@ -263,9 +263,9 @@ MonologueEngine.Data.Races["NightElf"] = {
                 },
             },
             BattleCry = {
-                "Try to keep up!",
+                "CATCH ME IF YOU CAN!",
                 "Swift as the moon!",
-                "Do enjoy this part!",
+                "BY ELUNE, FASTER!",
             },
         },
     },
@@ -495,5 +495,17 @@ MonologueEngine.Data.Races["NightElf"] = {
                 "Darnassus barely tolerates us. I understand why.",
             },
         },
+    },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "FOR TELDRASSIL!",
+        "BY ELUNE'S LIGHT!",
+        "FOR THE SENTINELS!",
+        "THE NIGHT IS OURS!",
+        "FOR ASHENVALE!",
+        "THE FOREST WILL NOT FALL!",
+        "MOON AND BLADE!",
+        "ELUNE-ADORE!",
     },
 }

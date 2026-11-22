@@ -522,4 +522,16 @@ MonologueEngine.Data.Races["Orc"] = {
             },
         },
     },
+    -- Battle cries (/mono cry and the Battle Cry button). A temperament preset or a
+    -- character profile may replace them; My Voice battle cries are added on top.
+    BattleCry = {
+        "LOK'TAR OGAR!",
+        "FOR THE HORDE!",
+        "BLOOD AND THUNDER!",
+        "VICTORY OR DEATH!",
+        "STRENGTH AND HONOR!",
+        "FOR DUROTAR!",
+        "THROM-KA!",
+        "NO MORE CHAINS!",
+    },
 }

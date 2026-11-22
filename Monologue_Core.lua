@@ -28,6 +28,7 @@ MonologueEngine = {
         Zones = {},  -- [zone name] = { lines } (zones/Zones.lua): zone-specific PvP lines
         Situations = {}, -- [situation key] = { lines } (situations/Situations.lua): world reactions
         DetailLines = {}, -- { Combat, Kill, LowHP, Idle } (situations/Details.lua): live-detail lines
+        SpellContextLines = {}, -- { Player, Rare, Elite, Hurt, Party } (situations/Details.lua): shared spell context lines
         Allegiances = {}, -- Azeroth Identity (identity/Identity.lua): allegiances / orders
         Professions = {}, -- Azeroth Identity: trade lines
         Hometowns = {},   -- Azeroth Identity: region-grouped hometown list
@@ -276,7 +277,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.1"
+Engine.VERSION = "0.1.2"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -2857,7 +2858,7 @@ end
 --               hardware-event send is refused: the line is queued for the next action.
 ---------------------------------------------------------------------------
 
-local PENDING_MAX_AGE = 60      -- seconds a queued line stays worth saying
+local PENDING_MAX_AGE = 15      -- seconds a queued line stays worth saying
 local GREETING_MAX_AGE = 10     -- seconds a queued greeting waits for your next key press
 local PARTY_MAX_AGE = 8         -- seconds a queued party reaction (rescue, victory) stays worth saying
 local HARDWARE_RETRY_LIMIT = 3  -- send attempts per queued line
@@ -2965,6 +2966,9 @@ function Engine:QueueSpeech(text, chatType, targetUnit, emoteToken, reason, sayT
         sayText = sayText, sayType = sayType, kind = kind,
         maxAge = (kind == "greeting" and GREETING_MAX_AGE) or (kind == "party" and PARTY_MAX_AGE) or PENDING_MAX_AGE,
         queuedAt = GetTime(), attempts = 0,
+        -- The moment it belongs to: a line is dropped once you've changed zone or gone into or
+        -- out of combat, so it never comes out somewhere it doesn't fit
+        zone = Clean(GetRealZoneText()), inCombat = UnitAffectingCombat("player") and true or false,
     }
     self:Debug("speech queued (" .. tostring(reason or "waiting") .. "): " .. text)
 end
@@ -3000,6 +3004,13 @@ function Engine:FlushPendingSpeech(source)
         return false
     end
     if pending.attempts >= HARDWARE_RETRY_LIMIT then return false end
+    local zoneNow = Clean(GetRealZoneText())
+    if (pending.zone and zoneNow and pending.zone ~= zoneNow)
+        or (pending.inCombat ~= nil and pending.inCombat ~= (UnitAffectingCombat("player") and true or false)) then
+        self.State.Pending = nil
+        self:Debug("queued line dropped: the moment has passed (zone or combat changed)")
+        return false
+    end
 
     -- Strict Safe-Mode: an ability press never says a held line aloud; show it locally
     if MonologueDB.strictSafeMode and self.State.PressSource then
@@ -5362,7 +5373,8 @@ end
 ---------------------------------------------------------------------------
 
 local PULL_SPEECH_COOLDOWN = 15   -- seconds; the pull line's own category cooldown
-Tune.OPENING_SPELL_SHARE = 0.70   -- pull lines that use the spell's own lines (the rest: situations, identity)
+Tune.OPENING_SPELL_SHARE = 0.70   -- pull lines that use the spell's own lines
+Tune.OPENING_SITUATION_SHARE = 0.20 -- pull lines that react to the moment (the last 10%: clan, traits, race...)
 local BIG_SPELL_CHANCE = 0.5      -- a big cooldown (SpellLines[...].big) speaking mid-fight
 local PVP_SPELL_CHANCE = 0.3      -- a signature move used on an enemy player
 local PREPULL_WINDOW = 3          -- seconds in which combat starting belongs to an opening cast
@@ -5474,7 +5486,41 @@ function Engine:GetSignatureEntry(spellID)
 end
 
 -- Returns deckKey, pool, label for a signature entry (nil if it has no usable lines)
-function Engine:ResolveSpellPool(name, entry)
+-- What the signature move is being used on, most specific first: a rare, an elite, an enemy
+-- player, while you're hurt, or in a group. Returns contextKey, share (how often a context
+-- line is used when one applies), or nil.
+local SPELL_CONTEXT_SHARE = { Rare = 0.75, Elite = 0.6, Player = 0.6, Hurt = 0.5, Party = 0.3 }
+function Engine:GetSpellContext(unit)
+    unit = unit or "target"
+    if UnitExists(unit) and UnitCanAttack("player", unit) and not UnitIsDeadOrGhost(unit) then
+        if UnitIsPlayer(unit) then return "Player", SPELL_CONTEXT_SHARE.Player end
+        local rank = Clean(UnitClassification(unit))
+        if rank == "rare" or rank == "rareelite" or rank == "worldboss" then return "Rare", SPELL_CONTEXT_SHARE.Rare end
+        if rank == "elite" then return "Elite", SPELL_CONTEXT_SHARE.Elite end
+    end
+    local hp, maxHp = Clean(UnitHealth("player")), Clean(UnitHealthMax("player"))
+    if type(hp) == "number" and type(maxHp) == "number" and maxHp > 0 and hp / maxHp < 0.35 then
+        return "Hurt", SPELL_CONTEXT_SHARE.Hurt
+    end
+    if IsInGroup and IsInGroup() then return "Party", SPELL_CONTEXT_SHARE.Party end
+    return nil
+end
+
+-- Returns deckKey, pool, label for a signature move. When the move is used on something that
+-- matters (see GetSpellContext), the line usually comes from the spell's own context pool
+-- (SpellLines["Charge"].Elite) or the shared one (Data.SpellContextLines.Elite).
+function Engine:ResolveSpellPool(name, entry, unit)
+    local context, share = self:GetSpellContext(unit)
+    if context and type(entry) == "table" and math.random() < share then
+        local own = entry[context]
+        if UsablePool(own) and self:AnyLineAvailable(own) then
+            return "SpellLines_" .. name .. "_" .. context, own, name .. " [" .. context .. "]"
+        end
+        local shared = self.Data.SpellContextLines and self.Data.SpellContextLines[context]
+        if UsablePool(shared) and self:AnyLineAvailable(shared) then
+            return "SpellContext_" .. context, shared, name .. " [shared " .. context .. "]"
+        end
+    end
     if UsablePool(entry) then
         return "SpellLines_" .. name, entry, name
     end
@@ -5504,7 +5550,7 @@ function Engine:SayPullLine(targetUnit, spellID, hardware)
     end
     local name, entry = self:GetSignatureEntry(spellID)
     local deckKey, pool, source
-    if name then deckKey, pool, source = self:ResolveSpellPool(name, entry) end
+    if name then deckKey, pool, source = self:ResolveSpellPool(name, entry, targetUnit) end
     if not pool then return false end
     -- {spell} names the move for every line drawn and spoken below
     self.State.CurrentSpell = name
@@ -5526,10 +5572,16 @@ function Engine:SayPullLineFrom(targetUnit, hardware, categoryKey, deckKey, pool
     -- can still take any pull.
     local fromLayer = false
     local sitKey, sitPool, sitTokens, sitDeck
-    if math.random() < Tune.OPENING_SPELL_SHARE then
+    local roll = math.random()
+    if roll < Tune.OPENING_SPELL_SHARE then
+        -- The spell's own line (which already reacts to rares, elites, players, ...)
         sitKey, sitPool, sitTokens, sitDeck = self:PickSituation(targetUnit, true)
-    else
+    elseif roll < Tune.OPENING_SPELL_SHARE + Tune.OPENING_SITUATION_SHARE then
+        -- A reaction to the moment; if nothing applies, the spell's line after all
         sitKey, sitPool, sitTokens, sitDeck = self:PickSituation(targetUnit)
+    else
+        -- Now and then: clan, traits, allegiance, race, details
+        sitKey, sitPool, sitTokens, sitDeck = self:PickSituation(targetUnit, true)
         if not sitKey then
             local mixKey, mixPool, mixLabel = self:PickLayeredPool("Combat")
             if mixPool then
@@ -5646,7 +5698,7 @@ function Engine:HandleSpellcast(spellID, hardware)
     end
 
     -- Mid-fight: a big cooldown may speak on its own; against players any signature move may
-    local deckKey, pool = self:ResolveSpellPool(sigName, sigEntry)
+    local deckKey, pool = self:ResolveSpellPool(sigName, sigEntry, targetUnit)
     if not pool or not inCombat then return end
     if sigEntry.big then
         self.State.CurrentSpell = sigName
