@@ -597,4 +597,17 @@ MonologueEngine.Data.Races["Dwarf"] = {
         "IRONFORGE! TO ARMS!",
         "AXES! FOR KHAZ MODAN!",
     },
+    -- Everyday moments (situations/Moments.lua): a Dwarf answers a yelling NPC its own way
+    Moments = {
+        NpcYell = {
+            "Shout all you like, {target}. You'll still go down.",
+            "Loud, aren't you? Come say it to my axe.",
+            "I've heard trogg pups with more bite, {target}.",
+            "Aye, aye. Big talk. Come on, then.",
+            "Bellow away, {target}. Saves me looking for you.",
+            "Ha! Ironforge has heard worse threats from a goat.",
+            "You want a fight, {target}? You've found one.",
+            "All noise and no beard.",
+        },
+    },
 }

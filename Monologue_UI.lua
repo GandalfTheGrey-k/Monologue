@@ -13,8 +13,8 @@ MonologueUI = {}
 
 local UI = MonologueUI
 
-local PANEL_WIDTH = 480
-local PANEL_HEIGHT = 676
+local PANEL_WIDTH = 560
+local PANEL_HEIGHT = 724
 local LEFT = 22
 local CONTROL_X = 210
 local DROPDOWN_WIDTH = 220
@@ -404,6 +404,17 @@ function UI:CreatePanel()
         GameTooltip:Show()
     end)
     controls.effects:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    controls.typos = CreateCheckbox(f, "Fix common typos", -632,
+        function() return MonologueDB.fixTypos == true end,
+        function(value) MonologueDB.fixTypos = value and true or false end)
+    controls.typos:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Fix common typos", 1, 0.82, 0)
+        GameTooltip:AddLine("Fixes words with one clear spelling in your typed chat (teh -> the, dont -> don't, i -> I), and one-letter slips when only one real word fits (wepaon -> weapon, ironforg -> Ironforge). Names, links, SHOUTING and Words Never Translated are left alone.", 1, 1, 1, true)
+        GameTooltip:AddLine("Try it without sending: /mono test <text>. Start a message with !! to send it exactly as typed, untranslated.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    controls.typos:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -----------------------------------------------------------------------
     -- Footer: active profile status + close
@@ -448,6 +459,7 @@ function UI:Refresh()
     controls.strict:Refresh()
     controls.preview:Refresh()
     controls.effects:Refresh()
+    controls.typos:Refresh()
     for _, cb in ipairs(controls.channels) do cb:Refresh() end
 
     local context = MonologueEngine.ActiveContext or {}
@@ -491,11 +503,13 @@ local TAB_ORDER = {
     { key = "settings", text = "General", width = 70 },
     { key = "lines", text = "Voice Lines", width = 86 },
     { key = "voice", text = "My Voice", width = 74 },
+    { key = "abilities", text = "Abilities", width = 70 },
 }
 
 function UI:GetTabFrame(key)
     if key == "lines" then return self.LinesFrame end
     if key == "voice" then return self.VoiceFrame end
+    if key == "abilities" then return self.AbilitiesFrame end
     return self.Frame
 end
 
@@ -531,6 +545,7 @@ function UI:ShowTab(key)
     self:CreatePanel()
     self:CreateLinesPanel()
     self:CreateVoicePanel()
+    self:CreateAbilitiesPanel()
     local to = self:GetTabFrame(key)
     local from = self:GetShownTab()
     if from and from ~= to then
@@ -799,16 +814,37 @@ function UI:CreateLinesPanel()
     l.emotes = Box(nil, "Reply when players emote at me (/wave, /bow, /cheer...)", LEFT - 4, -490, function(self)
         MonologueDB.emoteReplies = self:GetChecked() and true or false
     end)
-    l.moments = Box(nil, "Everyday moments (eating, mounting, resting, an ally falling)", LEFT - 4, -514, function(self)
+    l.moments = Box(nil, "Everyday moments (meals, travel, gathering, pets, mishaps, NPC visits)", LEFT - 4, -514, function(self)
         MonologueDB.momentLines = self:GetChecked() and true or false
     end)
-    Hint("Battle Cry shouts a line. Greet says hello to your target, and glows when a greeting or emote reply "
-        .. "is waiting. Right-drag to move. Keybinds (also in/out of character): Key Bindings > AddOns > Monologue.", -542)
+    l.moments:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Everyday moments", 1, 0.82, 0)
+        GameTooltip:AddLine("Now and then a short line when you eat or drink, mount up, walk into an inn or city, "
+            .. "visit a flight master, trainer, merchant or mailbox, open a profession window, hand in a quest, "
+            .. "mine, pick herbs, skin or fish, fill your bags, run out of air, take a long fall, summon or lose "
+            .. "your pet, or see a party member fall.", 1, 1, 1, true)
+        GameTooltip:AddLine("Add your own lines for any of them on the Abilities tab.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    l.moments:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    l.bubble = Box(nil, "Show the waiting line", LEFT - 4, -538, function(self)
+        MonologueDB.queueBubble = self:GetChecked() and true or false
+    end)
+    l.yells = Box(nil, "Answer NPCs who yell", LEFT + 216, -538, function(self)
+        MonologueDB.npcYells = self:GetChecked() and true or false
+    end)
+    l.banter = Box(nil, "Party banter (other Monologue users answer you, and you them)", LEFT - 4, -562, function(self)
+        MonologueDB.partyBanter = self:GetChecked() and true or false
+    end)
+    Hint("Battle Cry shouts a line. Greet says hello to your target, and glows when a line is waiting; the "
+        .. "waiting line also shows in a bubble you can click. Right-drag to move. Keybinds (also in/out of "
+        .. "character): Key Bindings > AddOns > Monologue. Macros: /mono say interrupt 30.", -590)
 
     -- Live status
-    CreateSectionHeader(f, "Right Now", -574)
+    CreateSectionHeader(f, "Right Now", -622)
     l.status = CreateLabel(f, "", "GameFontHighlightSmall")
-    l.status:SetPoint("TOPLEFT", LEFT, -592)
+    l.status:SetPoint("TOPLEFT", LEFT, -640)
     l.status:SetWidth(width - 110)
     l.status:SetWordWrap(true)
     l.status:SetJustifyV("TOP")
@@ -840,6 +876,9 @@ function UI:RefreshLines(skipSliders)
     l.greet:SetChecked(MonologueDB.greetButtonShown and true or false)
     l.emotes:SetChecked(MonologueDB.emoteReplies and true or false)
     l.moments:SetChecked(MonologueDB.momentLines ~= false)
+    l.bubble:SetChecked(MonologueDB.queueBubble ~= false)
+    l.yells:SetChecked(MonologueDB.npcYells ~= false)
+    l.banter:SetChecked(MonologueDB.partyBanter ~= false)
     if not skipSliders then
         l.pullSlider.Refresh()
         l.gapSlider.Refresh()
@@ -1172,6 +1211,18 @@ function UI:CreateVoicePanel()
         function() return CurrentCV().dialectStrength or "FULL" end,
         function(value) SetIdentity("dialectStrength", value) end)
     v.strengthNote = Note("")
+    v.moodLabel = CreateLabel(content, "Mood today:")
+    v.moodDD = CreateDropdown(content, 230, {
+            { value = "NORMAL", text = "Normal" },
+            { value = "Grim", text = "Grim" },
+            { value = "Weary", text = "Weary" },
+            { value = "Cheerful", text = "Cheerful" },
+            { value = "Fierce", text = "Fierce" },
+        },
+        function() return MonologueEngine:GetMood() or "NORMAL" end,
+        function(value) MonologueEngine:SetMood(value ~= "NORMAL" and value or nil) end)
+    v.moodNote = Note("|cff888888How your character feels today (also /mono mood). Some greetings, idle, kill and "
+        .. "low-health lines take on the mood; Weary and Grim speak a little less, Cheerful a little more.|r")
 
     -- Cross-race stances
     v.hStance = Header("Cross-Race Stances")
@@ -1428,6 +1479,8 @@ function UI:LayoutVoice()
         or (strength == "CLEAN" and "Clean: standard spelling. Your clan, allegiance, upbringing and the rest still shape what you say.")
         or "Full Dialect: the accent level from the General tab, with every respelling and swap.") .. "|r")
     noteAt(v.strengthNote)
+    at(v.moodLabel, 4, 5); at(v.moodDD, 130, 0); y = y + 30
+    noteAt(v.moodNote)
 
     -- Cross-race stances
     at(v.hStance, 0); y = y + 22
@@ -1568,7 +1621,284 @@ function UI:OnVoiceChanged()
             self:Refresh()
         end
         self:RefreshLines()
+        self:LayoutAbilities()
     end)
+end
+
+---------------------------------------------------------------------------
+-- Abilities tab: what kind of move each spell is (Ability Mapper), your own lines for any
+-- spell or moment, and pacing. Choices and lines are per character; the two switches are
+-- for all characters (MonologueDB).
+---------------------------------------------------------------------------
+local ABILITY_CHOICES = {
+    { value = "Attack", text = "Attack" },
+    { value = "Burst", text = "Burst (big cooldown)" },
+    { value = "Defend", text = "Defend" },
+    { value = "Interrupt", text = "Interrupt" },
+    { value = "Heal", text = "Heal" },
+    { value = "None", text = "Silent" },
+}
+local EVERY_CHOICES = {
+    { value = 1, text = "Every cast" },
+    { value = 2, text = "Every 2nd cast" },
+    { value = 3, text = "Every 3rd cast" },
+    { value = 5, text = "Every 5th cast" },
+    { value = 10, text = "Every 10th cast" },
+}
+local ABILITY_KINDS = { "Attack", "Burst", "Defend", "Interrupt", "Heal" }
+local SPELLS_PER_SUBMENU = 25
+
+-- "FlightMaster" -> "Flight Master", "PetSummon_Imp" -> "Pet Summon (Imp)"
+local function SpacedName(key)
+    local base, family = key:match("^(.-)_(.+)$")
+    local text = (base or key):gsub("(%l)(%u)", "%1 %2")
+    if family then text = text .. " (" .. family .. ")" end
+    return text
+end
+
+function UI:AbilityPoolGroups()
+    local engine = MonologueEngine
+    local groups = {}
+    local spells = engine:GetSeenSpells()
+    for first = 1, #spells, SPELLS_PER_SUBMENU do
+        local options = {}
+        local last = math.min(#spells, first + SPELLS_PER_SUBMENU - 1)
+        for i = first, last do
+            options[#options + 1] = { value = "Spell:" .. spells[i], text = spells[i] }
+        end
+        local label = "Spells you've cast"
+        if #spells > SPELLS_PER_SUBMENU then
+            label = label .. " (" .. spells[first]:sub(1, 1):upper() .. "-" .. spells[last]:sub(1, 1):upper() .. ")"
+        end
+        groups[#groups + 1] = { text = label, options = options }
+    end
+    local moments = {}
+    for _, key in ipairs(engine:GetMomentKeys()) do
+        moments[#moments + 1] = { value = "Moment:" .. key, text = SpacedName(key) }
+    end
+    groups[#groups + 1] = { text = "Everyday moments", options = moments }
+    local kinds = {}
+    for _, key in ipairs(ABILITY_KINDS) do
+        kinds[#kinds + 1] = { value = "Ability:" .. key, text = key .. " (spells of this kind)" }
+    end
+    groups[#groups + 1] = { text = "Kinds of move", options = kinds }
+    return groups
+end
+
+local function GetAbilityRow(a, index)
+    local row = a.spellRows[index]
+    if row then return row end
+    local engine = MonologueEngine
+    row = CreateFrame("Frame", nil, a.content)
+    row:SetSize(VOICE_CONTENT_WIDTH - 8, 26)
+    row.label = CreateLabel(row, "", "GameFontHighlightSmall")
+    row.label:SetPoint("LEFT", 2, 0)
+    row.label:SetWidth(150)
+    row.label:SetWordWrap(false)
+    row.kind = CreateDropdown(row, 160,
+        function()
+            local options = { { value = "Auto", text = "Auto: " .. engine:DescribeAbility(row.spell or "") } }
+            for _, option in ipairs(ABILITY_CHOICES) do options[#options + 1] = option end
+            return options
+        end,
+        function() return engine:GetAbilityChoice(row.spell or "") end,
+        function(value)
+            if row.spell then engine:SetAbilityCategory(row.spell, value) end
+        end)
+    row.kind:SetPoint("LEFT", 156, 0)
+    row.every = CreateDropdown(row, 130, EVERY_CHOICES,
+        function() return engine:GetAbilityEvery(row.spell or "") end,
+        function(value)
+            if row.spell then engine:SetAbilityEvery(row.spell, value) end
+        end)
+    row.every:SetPoint("LEFT", row.kind, "RIGHT", 6, 0)
+    a.spellRows[index] = row
+    return row
+end
+
+local function GetPoolLineRow(a, index)
+    local row = a.lineRows[index]
+    if row then return row end
+    row = CreateFrame("Frame", nil, a.content)
+    row:SetSize(VOICE_CONTENT_WIDTH - 8, 20)
+    row.text = CreateLabel(row, "", "GameFontHighlightSmall")
+    row.text:SetPoint("LEFT", 2, 0)
+    row.text:SetWidth(VOICE_CONTENT_WIDTH - 50)
+    row.text:SetWordWrap(false)
+    row.remove = CreateButton(row, "x", 22, nil)
+    row.remove:SetPoint("RIGHT", -2, 0)
+    a.lineRows[index] = row
+    return row
+end
+
+function UI:CreateAbilitiesPanel()
+    if self.AbilitiesFrame then return end
+    local a = { spellRows = {}, lineRows = {} }
+    self.Abilities = a
+    local engine = MonologueEngine
+    local f = CreateTabPanel("MonologueAbilitiesFrame", "abilities")
+
+    local scroll = CreateFrame("ScrollFrame", "MonologueAbilitiesScroll", f, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 18, -52)
+    scroll:SetPoint("BOTTOMRIGHT", -36, 20)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(VOICE_CONTENT_WIDTH, 900)
+    scroll:SetScrollChild(content)
+    a.content = content
+
+    local function Header(text)
+        local label = CreateLabel(content, text, "GameFontNormal")
+        local rule = content:CreateTexture(nil, "ARTWORK")
+        rule:SetColorTexture(1, 0.82, 0, 0.25)
+        rule:SetHeight(1)
+        rule:SetPoint("LEFT", label, "RIGHT", 8, 0)
+        rule:SetPoint("RIGHT", content, "RIGHT", -4, 0)
+        return label
+    end
+    local function Note(text)
+        local label = CreateLabel(content, text, "GameFontHighlightSmall")
+        label:SetWidth(VOICE_CONTENT_WIDTH - 8)
+        label:SetWordWrap(true)
+        label:SetJustifyV("TOP")
+        return label
+    end
+
+    a.hMap = Header("What Kind of Move")
+    a.mapHint = Note("|cff888888Every spell you cast shows up here. Spells with their own lines keep them; the rest "
+        .. "speak from a shared pool for their kind. Attack can open a fight; Burst, Defend, Interrupt and Heal may "
+        .. "also speak mid-fight now and then. Silent mutes a spell, even one with its own lines. The fight limits "
+        .. "(two lines a fight, each move once) still apply. Same as /mono map.|r")
+    a.auto = CreateCheckbox(content, "Spells without their own lines speak for their kind", 0,
+        function() return MonologueDB.abilityAuto ~= false end,
+        function(value)
+            MonologueDB.abilityAuto = value and true or false
+            UI:OnAbilitiesChanged()
+        end)
+    a.empty = Note("|cff888888No spells yet: cast a few and they appear here.|r")
+
+    a.hPace = Header("Pacing")
+    a.quiet = CreateCheckbox(content, "Quiet in dungeons (a quarter as often; silent in raids)", 0,
+        function() return MonologueDB.dungeonQuiet == true end,
+        function(value) MonologueDB.dungeonQuiet = value and true or false end)
+
+    a.hLines = Header("My Lines for a Spell or Moment")
+    a.linesHint = Note("|cff888888Pick a spell, an everyday moment or a kind of move, then add your own lines. "
+        .. "They join the lines Monologue already has (a spell with none gets yours alone). Saved for this "
+        .. "character and included in Export on My Voice. {target} and {zone} work here.|r")
+    a.poolDD = CreateGroupedDropdown(content, 280,
+        function() return UI:AbilityPoolGroups() end,
+        function() return a.poolKey or "" end,
+        function(value)
+            a.poolKey = (value ~= "" and value) or nil
+            UI:OnAbilitiesChanged()
+        end)
+    if a.poolDD.SetDefaultText then a.poolDD:SetDefaultText("Pick a spell or moment") end
+    a.lineInput = CreateInput(content, 290)
+    local function AddPoolLine()
+        if not a.poolKey then
+            engine.Print("|cffff8800Pick a spell or moment first.|r")
+            return
+        end
+        local ok, message = engine:CustomVoiceAddPoolLine(a.poolKey, a.lineInput:GetText())
+        if ok then
+            a.lineInput:SetText("")
+        elseif message then
+            engine.Print("|cffff8800" .. message .. "|r")
+        end
+        UI:OnAbilitiesChanged()
+    end
+    a.addLine = CreateButton(content, "Add Line", 80, AddPoolLine)
+    a.lineInput:SetScript("OnEnterPressed", AddPoolLine)
+    a.noLines = Note("|cff888888None of your own yet for this one.|r")
+
+    f:SetScript("OnShow", function() UI:LayoutAbilities() end)
+    f:Hide()
+    self.AbilitiesFrame = f
+end
+
+function UI:LayoutAbilities()
+    local a = self.Abilities
+    if not a or not self.AbilitiesFrame or not self.AbilitiesFrame:IsShown() then return end
+    if not MonologueDB or not MonologueCharDB then return end
+    local engine = MonologueEngine
+    local content = a.content
+    local y = 4
+    local function at(widget, x, dy)
+        widget:ClearAllPoints()
+        widget:SetPoint("TOPLEFT", content, "TOPLEFT", x, -(y + (dy or 0)))
+    end
+    local function noteAt(label)
+        at(label, 4)
+        label:Show()
+        y = y + math.max(14, label:GetStringHeight()) + 6
+    end
+
+    -- What kind of move
+    at(a.hMap, 0); y = y + 22
+    noteAt(a.mapHint)
+    at(a.auto, 0); a.auto:Refresh(); y = y + 28
+    for _, row in ipairs(a.spellRows) do row:Hide() end
+    local spells = engine:GetSeenSpells()
+    if #spells == 0 then noteAt(a.empty) else a.empty:Hide() end
+    for i, name in ipairs(spells) do
+        local row = GetAbilityRow(a, i)
+        row.spell = name
+        row.label:SetText(name)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -y)
+        row.kind:GenerateMenu()
+        row.every:GenerateMenu()
+        row:Show()
+        y = y + 28
+    end
+    y = y + 8
+
+    -- Pacing
+    at(a.hPace, 0); y = y + 22
+    at(a.quiet, 0); a.quiet:Refresh(); y = y + 34
+
+    -- Your own lines
+    at(a.hLines, 0); y = y + 22
+    noteAt(a.linesHint)
+    at(a.poolDD, 4); a.poolDD:GenerateMenu(); y = y + 30
+    at(a.lineInput, 10)
+    a.addLine:ClearAllPoints()
+    a.addLine:SetPoint("LEFT", a.lineInput, "RIGHT", 6, 0)
+    y = y + 28
+    for _, row in ipairs(a.lineRows) do row:Hide() end
+    a.noLines:Hide()
+    if a.poolKey then
+        local poolKey = a.poolKey
+        local lines = engine:GetPoolLines(poolKey)
+        if #lines == 0 then noteAt(a.noLines) end
+        for i, text in ipairs(lines) do
+            local row = GetPoolLineRow(a, i)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -y)
+            row.text:SetText(text)
+            row.remove:SetScript("OnClick", function()
+                engine:CustomVoiceRemovePoolLine(poolKey, i, text)
+                UI:OnAbilitiesChanged()
+            end)
+            row:Show()
+            y = y + 22
+        end
+    end
+    content:SetHeight(y + 20)
+end
+
+-- Deferred one frame and coalesced, like OnVoiceChanged
+function UI:OnAbilitiesChanged()
+    if self.AbilitiesRefreshPending then return end
+    self.AbilitiesRefreshPending = true
+    C_Timer.After(0, function()
+        self.AbilitiesRefreshPending = false
+        self:LayoutAbilities()
+    end)
+end
+
+function UI:OpenAbilities()
+    self:ShowTab("abilities")
 end
 
 ---------------------------------------------------------------------------
@@ -2406,12 +2736,102 @@ function UI:ToggleMinimap()
     end
 end
 
+---------------------------------------------------------------------------
+-- Queue bubble: shows the line waiting for your next key press. Left-click says it (a click
+-- is a key press), right-click skips it, right-drag moves it. MonologueDB.queueBubble.
+---------------------------------------------------------------------------
+local BUBBLE_WIDTH = 270
+local BUBBLE_COLORS = { SAY = { 1, 1, 1 }, YELL = { 1, 0.25, 0.25 }, EMOTE = { 1, 0.5, 0.25 } }
+
+function UI:CreateQueueBubble()
+    if self.QueueBubble or not MonologueDB then return end
+    local bubble = CreateFrame("Button", "MonologueQueueBubble", UIParent, "BackdropTemplate")
+    bubble:SetSize(BUBBLE_WIDTH, 50)
+    bubble:SetFrameStrata("MEDIUM")
+    bubble:SetClampedToScreen(true)
+    bubble:SetMovable(true)
+    bubble:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    bubble:RegisterForDrag("RightButton")
+    bubble:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    bubble:SetBackdropColor(0, 0, 0, 0.8)
+    bubble:SetBackdropBorderColor(0.8, 0.8, 0.8, 1)
+    bubble:Hide()
+
+    local pos = MonologueDB.bubblePos
+    if type(pos) == "table" and type(pos.point) == "string" and type(pos.relPoint) == "string"
+        and type(pos.x) == "number" and type(pos.y) == "number" then
+        bubble:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
+    else
+        bubble:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
+    end
+
+    local line = bubble:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    line:SetPoint("TOPLEFT", 10, -9)
+    line:SetWidth(BUBBLE_WIDTH - 20)
+    line:SetJustifyH("LEFT")
+    line:SetWordWrap(true)
+    local hint = bubble:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    hint:SetPoint("TOPLEFT", line, "BOTTOMLEFT", 0, -4)
+    hint:SetWidth(BUBBLE_WIDTH - 20)
+    hint:SetJustifyH("LEFT")
+
+    bubble:SetScript("OnClick", function(self, mouseButton)
+        if mouseButton == "RightButton" then
+            MonologueEngine:DropPendingLine()
+        else
+            MonologueEngine:GreetNow()
+        end
+        self:Hide()
+        self.shownText = nil
+    end)
+    bubble:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    bubble:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, relPoint, x, y = self:GetPoint(1)
+        if point then MonologueDB.bubblePos = { point = point, relPoint = relPoint, x = x, y = y } end
+    end)
+
+    -- Watches for a waiting line a few times a second (the bubble itself is hidden meanwhile)
+    local watcher = CreateFrame("Frame", nil, UIParent)
+    local elapsed = 0
+    watcher:SetScript("OnUpdate", function(_, delta)
+        elapsed = elapsed + delta
+        if elapsed < 0.2 then return end
+        elapsed = 0
+        local text, chatType = MonologueEngine:GetPendingLine()
+        if not text or not MonologueDB or MonologueDB.queueBubble == false then
+            if bubble:IsShown() then bubble:Hide() end
+            bubble.shownText = nil
+            return
+        end
+        if bubble.shownText ~= text then
+            bubble.shownText = text
+            local color = BUBBLE_COLORS[chatType] or BUBBLE_COLORS.SAY
+            line:SetTextColor(color[1], color[2], color[3])
+            line:SetText(text)
+            local key = GetBindingKey and GetBindingKey("MONOLOGUE_GREET")
+            local keyText = key and (GetBindingText and GetBindingText(key) or key)
+            hint:SetText((keyText and ("Click or press " .. keyText .. " to say it") or "Click to say it")
+                .. "  |  right-click: skip")
+            bubble:SetHeight(line:GetStringHeight() + hint:GetStringHeight() + 24)
+        end
+        if not bubble:IsShown() then bubble:Show() end
+    end)
+    self.QueueBubble = bubble
+end
+
 local cryButtonFrame = CreateFrame("Frame")
 cryButtonFrame:RegisterEvent("PLAYER_LOGIN")
 cryButtonFrame:SetScript("OnEvent", function(self)
     BuildSafely("minimap button", function() UI:CreateMinimapButton() end)
     BuildSafely("Battle Cry button", function() UI:CreateBattleCryButton() end)
     BuildSafely("Greet button", function() UI:CreateGreetButton() end)
+    BuildSafely("queue bubble", function() UI:CreateQueueBubble() end)
     BuildSafely("portrait menu entries", function() UI:HookFriendMenus() end)
     self:UnregisterEvent("PLAYER_LOGIN")
 end)

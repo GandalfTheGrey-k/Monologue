@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.3 (alpha)
+MONOLOGUE  -  version 0.1.4 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
@@ -30,6 +30,24 @@ UPDATING
 4. Extract it into AddOns as in INSTALLING, start the game, and type /mono version.
 
 
+NEW IN 0.1.4
+------------
+- New Abilities tab: spells without their own lines speak for their kind (Attack, Burst,
+  Defend, Interrupt, Heal), sorted automatically. Change a spell's kind or make it Silent
+  there or with /mono map. Every Nth cast, quiet in dungeons, and your own lines for any
+  spell or everyday moment (they travel with Export).
+- Druids: bear and cat lines (Maul, Growl, Demoralizing Roar, Bash, Feral Charge, Faerie
+  Fire (Feral), Pounce, Ravage).
+- More everyday moments: flight masters, trainers, merchants, mailboxes, quest hand-ins,
+  profession windows, gathering, fishing, full bags, running out of air, a long fall,
+  your pet (lines for each warlock demon).
+- Answer NPCs who yell nearby. Party banter between Monologue users in a group.
+- Mood today: Grim, Weary, Cheerful or Fierce (My Voice tab, /mono mood).
+- A bubble shows the line waiting for your next key press; click it to say it.
+- /mono say <kind> [chance] for your own macros. Start a message with !! to skip the accent.
+- Typo fixes (General tab, off by default), including one-letter slips. /mono test <text>.
+
+
 NEW IN 0.1.3
 ------------
 - Oaths replace the old openers and closers: now and then a short oath ("Gol'kosh!") before a
@@ -49,12 +67,18 @@ QUICK START
 -----------
 - Just play. Every few pulls, a signature move says a line in /s. Ordinary attacks (Heroic
   Strike, Fireball spam...) stay quiet.
-- /mono opens the settings. It has three tabs:
-    General      accent strength, chat preview, speech effects, Strict Safe-Mode, debug
-    Voice Lines  where and how often you speak (sliders), the Battle Cry and Greet buttons
+- /mono opens the settings. It has four tabs:
+    General      accent strength, chat preview, speech effects, typo fixes, Strict Safe-Mode,
+                 debug
+    Voice Lines  where and how often you speak (sliders), the Battle Cry and Greet buttons,
+                 everyday moments, the waiting-line bubble, NPC yells, party banter
     My Voice     your character: personality, clan, hometown, allegiance, upbringing,
-                 traits, oath / nemesis / catchphrase, My Oaths, words never translated,
-                 your own lines and word swaps
+                 traits, oath / nemesis / catchphrase, mood, My Oaths, words never
+                 translated, your own lines and word swaps
+    Abilities    what kind of move each spell is (Attack, Burst, Defend, Interrupt, Heal,
+                 Silent; every Nth cast), quiet in dungeons, and your own lines for any
+                 spell or everyday moment
+- Start a chat message with !! to send it exactly as typed (no accent).
 - Quick picks worth trying first (My Voice tab):
     Persona preset, Racial Temperament, Clan / Lineage, Hometown, Allegiance / Order,
     Upbringing, Defining Trait, Dialect Strength (Full / Light Flavor / Clean)
@@ -75,6 +99,12 @@ SLASH COMMANDS
   /mono greet        greet your target (or say a waiting line)
   /mono ic | ooc     in character / out of character (also a keybind)
   /mono keep <word>  a word that is never translated (/mono unkeep removes it)
+  /mono mood <grim|weary|cheerful|fierce|off>   how your character feels today
+  /mono say <kind> [chance]   a line on demand, for macros, e.g. "/mono say interrupt 30"
+                     (idle, kill, pull, hurt, interrupt, heal, defend, greet, cry)
+  /mono map <spell> <kind>   what kind of move a spell is (attack, burst, defend,
+                     interrupt, heal, none, auto); /mono map lists your choices
+  /mono test <text>  show what a message would turn into, without sending it
   /mono cry          battle cry
   /mono debug        show [Monologue Debug] lines in chat
   /mono version      your version

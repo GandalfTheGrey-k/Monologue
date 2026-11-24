@@ -168,5 +168,32 @@ MonologueEngine.Data.Classes["HUNTER"] = {
             "Couldn't miss that one.",
         },
     },
+    -- Your pet (situations/Moments.lua explains the keys): {target} is its name
+    Moments = {
+        PetSummon = {
+            "Here, {target}. Good to see you.",
+            "Come on, {target}. There's hunting to do.",
+            "Who's ready? You are.",
+            "Nose to the ground.",
+            "Stay close. Watch my back.",
+            "Hungry? Me too.",
+            "There's my good beast.",
+            "We hunt together. Always.",
+            "Did you miss me, {target}?",
+            "Ears up. Something's out there.",
+        },
+        PetDown = {
+            "No. {target}, stay with me.",
+            "Easy, {target}. I'll get you back on your feet.",
+            "They hurt my companion. Mistake.",
+            "Not my beast. Not today.",
+            "Hold on. I'm coming.",
+            "I'll make them pay for that, {target}.",
+            "Rest. I'll finish this.",
+            "You fought well, {target}.",
+            "That was my partner you just killed.",
+            "Don't go far. I'll bring you back.",
+        },
+    },
     pvpStyle = "Patient Marksman"
 }

@@ -507,6 +507,155 @@ local function PreserveTitles(text, preserve)
     end))
 end
 
+-- Typed chat starting with this is sent exactly as typed (the prefix is dropped)
+local BYPASS_PREFIX = "!!"
+
+-- Common typos in typed chat (General tab, off by default). Only words with one clear fix;
+-- whole words, letter case kept. Run after names, links and kept words are masked.
+local COMMON_TYPOS = {}
+for wrong, right in ([[
+teh=the hte=the taht=that thsi=this tihs=this adn=and nad=and wiht=with whit=with
+recieve=receive recieved=received beleive=believe belive=believe acheive=achieve
+alot=a_lot definately=definitely definatly=definitely wierd=weird untill=until
+becuase=because becasue=because beacuse=because thier=their freind=friend freinds=friends
+tommorow=tomorrow tomorow=tomorrow occured=occurred seperate=separate goverment=government
+neccessary=necessary necesary=necessary accross=across agian=again aginst=against
+arguement=argument begining=beginning buisness=business calender=calendar comming=coming
+dissapear=disappear embarass=embarrass enviroment=environment existance=existence
+finaly=finally foriegn=foreign fourty=forty gaurd=guard happend=happened harrass=harass
+knowlege=knowledge liason=liaison libary=library lisence=license mispell=misspell
+noticable=noticeable occassion=occasion persue=pursue posession=possession prefered=preferred
+probly=probably realy=really reccomend=recommend rember=remember remeber=remember
+sieze=seize suprise=surprise truely=truly wich=which whcih=which wether=whether
+yuor=your yoru=your knwo=know konw=know jsut=just juts=just
+dont=don't cant=can't didnt=didn't doesnt=doesn't isnt=isn't wasnt=wasn't
+wouldnt=wouldn't couldnt=couldn't shouldnt=shouldn't havent=haven't hasnt=hasn't
+arent=aren't werent=weren't thats=that's whats=what's theyre=they're youre=you're
+im=I'm ive=I've i=I
+]]):gmatch("(%a+)=([%a_']+)") do
+    COMMON_TYPOS[wrong] = (right:gsub("_", " "))
+end
+-- One-letter slips (also "Fix common typos"): a word of five letters or more that isn't a
+-- known word is fixed only when exactly one known word is one swapped, missing or extra letter
+-- away ("wepaon" -> "weapon", "ironforg" -> "Ironforge"). Known words: MonologueWords
+-- (Monologue_Words.lua) and every word in Monologue's own lines, built on first use.
+-- Capitalised words are names: only a misspelt place name is fixed. ALL CAPS is left alone.
+local MIN_SLIP_LENGTH = 5
+local KNOWN_WORDS, KNOWN_PLACES
+local function BuildKnownWords()
+    KNOWN_WORDS, KNOWN_PLACES = {}, {}
+    local lists = type(MonologueWords) == "table" and MonologueWords or {}
+    for _, block in ipairs(type(lists.Common) == "table" and lists.Common or {}) do
+        for word in block:gmatch("%a+") do KNOWN_WORDS[word:lower()] = true end
+    end
+    for _, block in ipairs(type(lists.Places) == "table" and lists.Places or {}) do
+        for word in block:gmatch("[%a']+") do
+            if not word:find("'") then KNOWN_PLACES[word:lower()] = word end
+        end
+    end
+    -- Every word in the addon's own lines and data
+    local visited = {}
+    local function Harvest(t, depth)
+        if depth > 8 or visited[t] then return end
+        visited[t] = true
+        for key, value in pairs(t) do
+            if type(value) == "string" then
+                for word in value:gmatch("%a+") do KNOWN_WORDS[word:lower()] = true end
+            elseif type(value) == "table" then
+                Harvest(value, depth + 1)
+            end
+            if type(key) == "string" then KNOWN_WORDS[key:lower()] = true end
+        end
+    end
+    if MonologueEngine and type(MonologueEngine.Data) == "table" then
+        pcall(Harvest, MonologueEngine.Data, 0)
+    end
+end
+
+local LETTERS = "abcdefghijklmnopqrstuvwxyz"
+-- The one entry of `known` that is one slip away from `lower`, or nil (none, or more than one)
+local function OneSlipAway(lower, known)
+    local hits, n = {}, #lower
+    for i = 1, n - 1 do
+        local swapped = lower:sub(1, i - 1) .. lower:sub(i + 1, i + 1) .. lower:sub(i, i) .. lower:sub(i + 2)
+        if known[swapped] then hits[swapped] = true end
+    end
+    for i = 1, n do
+        local shorter = lower:sub(1, i - 1) .. lower:sub(i + 1)
+        if known[shorter] then hits[shorter] = true end
+    end
+    for i = 0, n do
+        local head, tail = lower:sub(1, i), lower:sub(i + 1)
+        for j = 1, 26 do
+            local longer = head .. LETTERS:sub(j, j) .. tail
+            if known[longer] then hits[longer] = true end
+        end
+    end
+    local only
+    for candidate in pairs(hits) do
+        if only then return nil end
+        only = candidate
+    end
+    return only
+end
+
+-- A name typed in lower case ("brian") is never "fixed": you, the people around you, your
+-- friends and rivals
+local NEARBY_UNITS = { "player", "target", "focus", "mouseover", "party1", "party2", "party3", "party4" }
+local function IsKnownName(lower)
+    for _, unit in ipairs(NEARBY_UNITS) do
+        local ok, same = pcall(function()
+            if not UnitExists(unit) then return false end
+            local name = UnitName(unit)
+            return type(name) == "string" and name:lower() == lower
+        end)
+        if ok and same then return true end
+    end
+    local db = MonologueCharDB
+    if type(db) == "table" then
+        for _, key in ipairs({ "Friends", "Rivals" }) do
+            local list = db[key]
+            if type(list) == "table" then
+                if list[lower] then return true end
+                for _, entry in pairs(list) do
+                    if type(entry) == "table" and type(entry.name) == "string" and entry.name:lower() == lower then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function FixSlip(word)
+    if #word < MIN_SLIP_LENGTH or word:find("'") then return nil end
+    if word == word:upper() then return nil end
+    if not KNOWN_WORDS then BuildKnownWords() end
+    local lower = word:lower()
+    if KNOWN_WORDS[lower] or KNOWN_PLACES[lower] then return nil end
+    if IsKnownName(lower) then return nil end
+    local place = OneSlipAway(lower, KNOWN_PLACES)
+    if word:find("^%u") then
+        -- A name: only a misspelt place, never someone's own name
+        if word:find("%u", 2) then return nil end
+        return place and KNOWN_PLACES[place] or nil
+    end
+    local fix = OneSlipAway(lower, KNOWN_WORDS)
+    if place and fix and fix ~= place then return nil end
+    if place then return KNOWN_PLACES[place] end
+    return fix
+end
+
+local function FixTypos(text)
+    return (text:gsub("%f[%w']([%a']+)%f[^%w']", function(word)
+        local fix = COMMON_TYPOS[word:lower()]
+        if not fix then return FixSlip(word) end
+        if fix:sub(1, 1) == "I" and (fix == "I" or fix:find("^I'")) then return fix end
+        return MatchCase(word, fix)
+    end))
+end
+
 -- Words Never Translated (My Voice tab, /mono keep): matched in any letter case, whole words
 -- only (multi-word entries allowed)
 local function PreserveKeepWords(text, preserve)
@@ -661,6 +810,8 @@ function Translator:Translate(text, intensity, dialectOverride)
     -- in the middle of a sentence ("Clan BattleHammer", "Ironforge", "Magni")
     text = PreserveGuildName(text, Preserve)
     text = PreserveKeepWords(text, Preserve)
+    -- Typed chat only: common typos fixed first (General tab)
+    if self.TypedChat and MonologueDB and MonologueDB.fixTypos then text = FixTypos(text) end
     text = PreserveTitles(text, Preserve)
     text = PreserveProperNouns(text, Preserve)
 
@@ -920,6 +1071,15 @@ function Translator:ProcessEditBox(editBox)
     boxState.seenTime = now
     boxState.seenText = text
 
+    -- "!!" at the start: send the rest exactly as typed
+    if text:sub(1, 2) == BYPASS_PREFIX then
+        local plain = strtrim(text:sub(3))
+        boxState.preview = nil
+        boxState.lastOutput = plain
+        editBox:SetText(plain)
+        return Result("sent as typed (!!)")
+    end
+
     local chatType = editBox:GetAttribute("chatType")
     local intensity = self:GetChannelIntensity(chatType)
     -- The preview (if any) belongs to this text only
@@ -936,7 +1096,9 @@ function Translator:ProcessEditBox(editBox)
     if preview and preview.source == text and preview.chatType == chatType and preview.intensity == intensity then
         ok, translated = true, preview.output
     else
+        self.TypedChat = true
         ok, translated = pcall(self.Translate, self, text, intensity)
+        self.TypedChat = nil
     end
     if not ok then return Result("translator error", chatType) end
     if type(translated) ~= "string" or translated == text then
@@ -1001,11 +1163,14 @@ function Translator:UpdatePreview(editBox)
 
     local text = editBox:GetText()
     if type(text) ~= "string" or text == "" or text:sub(1, 1) == "/" then return off() end
+    if text:sub(1, 2) == BYPASS_PREFIX then return off() end
     local chatType = editBox:GetAttribute("chatType")
     local intensity = self:GetChannelIntensity(chatType)
     if intensity <= 0 or self:IsOutOfCharacter() then return off() end
 
+    self.TypedChat = true
     local ok, translated = pcall(self.Translate, self, text, intensity)
+    self.TypedChat = nil
     if not ok or type(translated) ~= "string" or translated == text or #translated > MAX_CHAT_BYTES then
         return off()
     end

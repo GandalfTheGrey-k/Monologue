@@ -238,6 +238,12 @@ local DEFAULT_CONFIG = {
     speechEffects = true,      -- Slurred when drunk, shaky when badly hurt (General tab)
     momentLines = true,        -- Everyday moments: eating, mounting, resting, an ally falling (Voice Lines tab)
     outOfCharacter = false,    -- In-character toggle (keybind, /mono ic, /mono ooc): true = no translation, no automatic lines
+    queueBubble = true,        -- A bubble shows the line waiting for your next key press; click it to say it (Voice Lines tab)
+    npcYells = true,           -- Now and then answer a creature or NPC yelling close by (Voice Lines tab)
+    partyBanter = true,        -- Monologue users in your group may answer your lines, and you theirs (Voice Lines tab)
+    fixTypos = false,          -- Fix common typos in typed chat ("teh" -> "the") (General tab)
+    abilityAuto = true,        -- Spells without their own lines speak from a shared pool for their kind (Abilities tab)
+    dungeonQuiet = false,      -- Automatic lines a quarter as often in dungeons, none in raids (Abilities tab)
     -- keepWords = { "word", ... } is written by the Words Never Translated list (My Voice tab, /mono keep)
     -- buttonPos = { point, relPoint, x, y } is written when the button is moved
 }
@@ -251,6 +257,9 @@ local CHAR_DB_KEYS = {
     "Friends",         -- Marked friends: [normalizedName] = { name, race, note, addedAt }
     "Duels",           -- Duel records (separate from Rivals): [normalizedName] = { name, wins, losses, lastZone, lastTime }
     "CustomVoice",     -- My Voice: { persona, oaths, wordSwaps, phraseSwaps, battleCries, guildGreeting }
+    "AbilityMap",      -- Abilities tab: [spell name] = Attack | Burst | Defend | Interrupt | Heal | None
+    "AbilityEvery",    -- Abilities tab: [spell name] = N (speaks on every Nth cast only)
+    "SeenSpells",      -- Abilities tab: [spell name] = { id, at } for spells you have cast
 }
 
 ---------------------------------------------------------------------------
@@ -284,7 +293,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.3"
+Engine.VERSION = "0.1.4"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -1041,7 +1050,7 @@ local CV_DIALECT_STRENGTHS = { LIGHT = true, CLEAN = true }
 local CV_MAX_NAME = 40
 
 local function CVNewTable()
-    return { oaths = {}, wordSwaps = {}, phraseSwaps = {}, battleCries = {}, raceStances = {} }
+    return { oaths = {}, wordSwaps = {}, phraseSwaps = {}, battleCries = {}, raceStances = {}, extraLines = {} }
 end
 
 -- Cross-race stances, from friendliest to coldest (labels live in Monologue_UI.lua)
@@ -1062,8 +1071,18 @@ function Engine:GetCustomVoice()
         cv = CVNewTable()
         MonologueCharDB.CustomVoice = cv
     end
-    for _, key in ipairs({ "oaths", "wordSwaps", "phraseSwaps", "battleCries", "raceStances" }) do
+    for _, key in ipairs({ "oaths", "wordSwaps", "phraseSwaps", "battleCries", "raceStances", "extraLines" }) do
         if type(cv[key]) ~= "table" then cv[key] = {} end
+    end
+    -- Your lines for single spells and moments: string keys, lists of non-empty strings
+    for poolKey, list in pairs(cv.extraLines) do
+        local clean = {}
+        if type(poolKey) == "string" and type(list) == "table" then
+            for _, line in ipairs(list) do
+                if type(line) == "string" and line ~= "" then clean[#clean + 1] = line end
+            end
+        end
+        cv.extraLines[poolKey] = #clean > 0 and clean or nil
     end
     -- Old openers and closers (before 0.1.3) become oaths: "By Magni's beard," and
     -- ", by Magni's beard!" both turn into "By Magni's beard!"
@@ -1131,6 +1150,7 @@ function Engine:HasCustomVoice()
         or next(cv.raceStances or {}) ~= nil or #(cv.oaths or cv.openers or {}) > 0
         or #(cv.closers or {}) > 0 or #(cv.battleCries or {}) > 0
         or next(cv.wordSwaps or {}) ~= nil or next(cv.phraseSwaps or {}) ~= nil
+        or next(cv.extraLines or {}) ~= nil
 end
 
 local function CVAppendList(base, extra)
@@ -1184,6 +1204,55 @@ local function ApplyCustomVoice(merged, cv)
         merged.GuildGreetings = greetings
         used = true
     end
+
+    -- Your own lines for single spells, moments and ability kinds (Abilities tab). The
+    -- merged profile is a private copy, so its pools may be replaced or extended in place.
+    if type(cv.extraLines) == "table" then
+        local contextKeys = { Rare = true, Elite = true, Player = true, Hurt = true, Party = true }
+        local data = Engine.Data
+        for poolKey, lines in pairs(cv.extraLines) do
+            local kind, key
+            if type(poolKey) == "string" then kind, key = poolKey:match("^(%a+):(.+)$") end
+            if kind and type(lines) == "table" and #lines > 0 then
+                if kind == "Spell" then
+                    if type(merged.SpellLines) ~= "table" then merged.SpellLines = {} end
+                    local entry = merged.SpellLines[key]
+                    if type(entry) ~= "table" then
+                        merged.SpellLines[key] = CVAppendList(nil, lines)
+                    elseif #entry > 0 then
+                        local copy = CVAppendList(entry, lines)
+                        for k, val in pairs(entry) do
+                            if type(k) ~= "number" then copy[k] = val end
+                        end
+                        merged.SpellLines[key] = copy
+                    else
+                        -- Lines split by persona: yours join the default pool and every persona's
+                        entry.Default = CVAppendList(entry.Default, lines)
+                        for k, val in pairs(entry) do
+                            if k ~= "Default" and not contextKeys[k] and type(val) == "table" and #val > 0 then
+                                entry[k] = CVAppendList(val, lines)
+                            end
+                        end
+                    end
+                elseif kind == "Moment" then
+                    if type(merged.Moments) ~= "table" then merged.Moments = {} end
+                    local base = merged.Moments[key]
+                    if not (type(base) == "table" and #base > 0) then base = data.MomentLines and data.MomentLines[key] end
+                    merged.Moments[key] = CVAppendList(base, lines)
+                elseif kind == "Ability" then
+                    if type(merged.AbilityLines) ~= "table" then merged.AbilityLines = {} end
+                    local base = merged.AbilityLines[key]
+                    if not (type(base) == "table" and #base > 0) then
+                        base = (type(merged.Moments) == "table" and merged.Moments[key])
+                            or (data.AbilityLines and data.AbilityLines[key])
+                            or (data.MomentLines and data.MomentLines[key])
+                    end
+                    merged.AbilityLines[key] = CVAppendList(base, lines)
+                end
+                used = true
+            end
+        end
+    end
     return used
 end
 
@@ -1212,6 +1281,51 @@ function Engine:CustomVoiceRemoveLine(listKey, index, expectedText)
     if type(list) ~= "table" or not list[index] then return false end
     if expectedText ~= nil and list[index] ~= expectedText then return false end
     table.remove(list, index)
+    self:BuildActiveProfile()
+    return true
+end
+
+-- Your own lines for one spell, moment or ability kind (Abilities tab). poolKey is
+-- "Spell:<name>", "Moment:<moment>" or "Ability:<kind>". Returns the list (may be empty).
+function Engine:GetPoolLines(poolKey)
+    local cv = self:GetCustomVoice()
+    local list = cv and type(poolKey) == "string" and cv.extraLines[poolKey]
+    return type(list) == "table" and list or {}
+end
+
+function Engine:CustomVoiceAddPoolLine(poolKey, text)
+    local cv = self:GetCustomVoice()
+    if not cv then return false, "bad list" end
+    if not self:ValidPoolKey(poolKey) then return false, "Pick a spell or moment first." end
+    text = CVCleanText(text, CV_MAX_TEXT)
+    if not text then return false, "Type a line first." end
+    local list = cv.extraLines[poolKey]
+    if type(list) ~= "table" then
+        local pools = 0
+        for _ in pairs(cv.extraLines) do pools = pools + 1 end
+        if pools >= Tune.POOL_KEYS_MAX then
+            return false, "You already have lines for " .. pools .. " spells and moments (the most there can be)."
+        end
+        list = {}
+        cv.extraLines[poolKey] = list
+    end
+    if #list >= CV_MAX_ITEMS then return false, "That list is full (" .. CV_MAX_ITEMS .. ")." end
+    for _, existing in ipairs(list) do
+        if existing:lower() == text:lower() then return false, "Already in the list." end
+    end
+    list[#list + 1] = text
+    self:BuildActiveProfile()
+    return true
+end
+
+-- expectedText (optional) guards against a stale index, e.g. a double-click on [x]
+function Engine:CustomVoiceRemovePoolLine(poolKey, index, expectedText)
+    local cv = self:GetCustomVoice()
+    local list = cv and type(poolKey) == "string" and cv.extraLines[poolKey]
+    if type(list) ~= "table" or type(list[index]) ~= "string" then return false end
+    if expectedText and list[index] ~= expectedText then return false end
+    table.remove(list, index)
+    if #list == 0 then cv.extraLines[poolKey] = nil end
     self:BuildActiveProfile()
     return true
 end
@@ -1361,6 +1475,15 @@ function Engine:ExportCustomVoice()
     end
     addSwaps("w", cv.wordSwaps)
     addSwaps("h", cv.phraseSwaps)
+    -- e = your lines for one spell, moment or ability kind
+    local poolKeys = {}
+    for poolKey in pairs(cv.extraLines or {}) do poolKeys[#poolKeys + 1] = poolKey end
+    table.sort(poolKeys)
+    for _, poolKey in ipairs(poolKeys) do
+        for _, line in ipairs(cv.extraLines[poolKey]) do
+            records[#records + 1] = "e:" .. CVEncode(poolKey) .. "=" .. CVEncode(line)
+        end
+    end
     -- Identity: l clan, n clan name, t hometown, a allegiance, f profession, u upbringing,
     -- x trait, d dialect strength
     for _, pair in ipairs({ { "l", "clan" }, { "n", "clanName" }, { "t", "hometown" }, { "a", "allegiance" },
@@ -1410,6 +1533,22 @@ local function CVParseString(str)
             elseif CV_IDENTITY_TAGS[tag] then
                 local field = CV_IDENTITY_TAGS[tag]
                 cv[field] = CVCleanText(CVDecode(value), CV_ANCHOR_FIELDS[field] and CV_MAX_ANCHOR or CV_MAX_NAME)
+            elseif tag == "e" then
+                local poolKey, line = value:match("^([^=]*)=(.*)$")
+                poolKey = poolKey and CVCleanText(CVDecode(poolKey), CV_MAX_TEXT)
+                line = line and CVCleanText(CVDecode(line), CV_MAX_TEXT)
+                if poolKey and line and Engine:ValidPoolKey(poolKey) then
+                    local list = cv.extraLines[poolKey]
+                    if not list then
+                        local pools = 0
+                        for _ in pairs(cv.extraLines) do pools = pools + 1 end
+                        if pools < Tune.POOL_KEYS_MAX then
+                            list = {}
+                            cv.extraLines[poolKey] = list
+                        end
+                    end
+                    if list and #list < CV_MAX_ITEMS then list[#list + 1] = line end
+                end
             elseif tag == "w" or tag == "h" then
                 local from, to = value:match("^([^=]*)=(.*)$")
                 from = from and CVCleanText(CVDecode(from), CV_MAX_KEY)
@@ -1712,6 +1851,8 @@ end
 
 -- Identity-only lines for a moment (no class pool): Greet, Idle, Loot, Kill, ...
 function Engine:PickIdentityPool(kind)
+    local moodKey, moodPool = self:MoodPool(kind)
+    if moodPool then return moodKey, moodPool, "mood" end
     if kind == "Idle" and IsResting and Clean(IsResting()) then
         -- At an inn or in a city: the inn lines take over half the time
         local inn = self.Data.WorldMoments.Inn
@@ -1774,13 +1915,13 @@ function Engine:GetTraitPool(kind)
 end
 
 -- Says a line straight from a pool (no chance roll): idle chatter on a key press
-function Engine:SpeakIdentityLine(categoryKey, pool, cooldown, hardware)
+function Engine:SpeakIdentityLine(categoryKey, pool, cooldown, hardware, deckKey)
     local canSpeak, reason = self:CanSpeak(categoryKey)
     if not canSpeak then
         self:Debug("identity line skipped (" .. tostring(reason) .. ", " .. categoryKey .. ")")
         return false
     end
-    local line = self:GetShuffledLine(categoryKey, pool)
+    local line = self:GetShuffledLine(deckKey or categoryKey, pool)
     if not line then return false end
     self.State.BareLine = true
     local ok, spoke = pcall(self.Speak, self, line, "SAY", nil, { key = categoryKey, duration = cooldown }, nil, hardware)
@@ -1797,7 +1938,9 @@ function Engine:TryIdleLine(hardware)
     local deckKey, pool, label = self:PickIdentityPool("Idle")
     if not pool then return false end
     self:Debug("idle line from " .. label)
+    self.State.BanterTopic = "Idle"
     local ok = self:SpeakIdentityLine(deckKey, pool, Tune.IDLE_COOLDOWN, hardware)
+    self.State.BanterTopic = nil
     if ok then self.State.LastIdleAt = now end
     return ok
 end
@@ -1954,10 +2097,12 @@ function Engine:TryKillLine()
     self.State.SpeakKind = "party"
     self.State.BareLine = true
     self.State.OathMoment = "Kill"
+    self.State.BanterTopic = "Kill"
     local ok, spoke = pcall(self.ProcessTrigger, self, Tune.IDENTITY_MOMENT_TIER, deckKey, pool, Tune.KILL_CHANCE, nil)
     self.State.SpeakKind = nil
     self.State.BareLine = nil
     self.State.OathMoment = nil
+    self.State.BanterTopic = nil
     if ok and spoke then self.State.KillLineAt = now end
 end
 
@@ -2161,6 +2306,9 @@ function Engine:HandleAddonMessage(prefix, text, channel, sender)
         if hash then self:AddPartyLine(hash, nil) end
     elseif kind == "N" then
         self:HandleNemesisSpotted(name, text:match("^N%^(.+)$"))
+    elseif kind == "B" then
+        local topic = text:match("^B%^(%a+)$")
+        if topic then pcall(self.HandleBanter, self, topic, name) end
     end
 end
 
@@ -2997,7 +3145,7 @@ function Engine:QueueSpeech(text, chatType, targetUnit, emoteToken, reason, sayT
         text = text, chatType = chatType, targetUnit = targetUnit, emoteToken = emoteToken,
         sayText = sayText, sayType = sayType, kind = kind,
         maxAge = (kind == "greeting" and GREETING_MAX_AGE) or (kind == "party" and PARTY_MAX_AGE) or PENDING_MAX_AGE,
-        queuedAt = GetTime(), attempts = 0,
+        queuedAt = GetTime(), attempts = 0, topic = self.State.BanterTopic,
         -- The moment it belongs to: a line is dropped once you've changed zone or gone into or
         -- out of combat, so it never comes out somewhere it doesn't fit
         zone = Clean(GetRealZoneText()), inCombat = UnitAffectingCombat("player") and true or false,
@@ -3019,6 +3167,22 @@ function Engine:HasPendingLine()
         return true, pending.kind
     end
     return false
+end
+
+-- The waiting line for the queue bubble: text, channel, seconds waited, max age (or nil)
+function Engine:GetPendingLine()
+    local pending = self.State.Pending
+    if not pending then return nil end
+    local age = GetTime() - pending.queuedAt
+    local maxAge = pending.maxAge or PENDING_MAX_AGE
+    if age > maxAge then return nil end
+    if pending.sayText then return pending.sayText, pending.sayType or "SAY", age, maxAge end
+    return pending.text, pending.chatType, age, maxAge
+end
+
+function Engine:DropPendingLine()
+    if self.State.Pending then self:Debug("queued line dismissed") end
+    self.State.Pending = nil
 end
 
 -- Sends the queued line. Call it ONLY from a hardware-event context: a /mono command
@@ -3086,6 +3250,7 @@ function Engine:FlushPendingSpeech(source)
     if problem == "ratelimited" then return true end
     self:Debug("speech route: queued line said on your " .. ((source == "slash") and "ability press / click"
         or tostring(source)) .. " -> " .. chatType)
+    if pending.topic then pcall(self.SendBanterTopic, self, pending.topic) end
     PairEmote(pending.targetUnit, pending.emoteToken)
     return true
 end
@@ -3249,6 +3414,7 @@ function Engine:Speak(text, chatType, targetUnit, categoryCooldown, emoteToken, 
     self:ClearSendProblem()
     if problem == "ratelimited" then return true, "local" end
     self:Debug("speech sent via " .. outType .. " (asked for " .. chatType .. "): " .. outText)
+    if self.State.BanterTopic then pcall(self.SendBanterTopic, self, self.State.BanterTopic) end
 
     -- Cross-Faction Native Emote Pairing
     PairEmote(targetUnit, emoteToken)
@@ -3263,7 +3429,8 @@ end
 function Engine:ProcessTrigger(tier, categoryKey, pool, chance, targetUnit, emoteToken, chatType, hardware)
     if type(pool) ~= "table" or #pool == 0 or not MonologueDB then return false end
 
-    local effectiveChance = math.min(1, (chance or 1.0) * (MonologueDB.chattiness or 1.0))
+    local effectiveChance = math.min(1, (chance or 1.0) * (MonologueDB.chattiness or 1.0) * self:MoodChattiness()
+        * self:PlaceChattiness())
     if math.random() > effectiveChance then
         -- Logged at most once per 10s per category, so routine misses don't flood the log
         local misses = self.State.RollMissLog
@@ -4410,6 +4577,11 @@ function Engine:PickGreeting(unit)
         end
     end
 
+    -- Your mood now and then (never over a dedicated friend note or your own guild greeting)
+    if pool and not categoryKey:find("^Friend_Note_") and categoryKey ~= "Guild_MyVoice" then
+        local moodKey, moodPool = self:MoodPool("Greet")
+        if moodPool then return moodKey, moodPool, chance end
+    end
     -- Now and then a clan or allegiance greeting instead (never over a dedicated friend note)
     if pool and not categoryKey:find("^Friend_Note_") and categoryKey ~= "Guild_MyVoice"
         and math.random() < Tune.IDENTITY_GREET_SHARE then
@@ -4681,6 +4853,11 @@ Tune.MOMENTS = {
     Mount = { chance = 0.15, cooldown = 900 },
     Rest = { chance = 0.40, cooldown = 1800 },
     AllyDown = { chance = 0.50, cooldown = 120 },
+    NpcYell = { chance = 0.35, cooldown = 300 },
+    FlightMaster = { chance = 0.30, cooldown = 1200 },
+    Mailbox = { chance = 0.15, cooldown = 1800 },
+    Trainer = { chance = 0.40, cooldown = 1800 },
+    QuestDone = { chance = 0.12, cooldown = 600 },
 }
 Tune.MAX_COMBAT_LINES = 2           -- repeat guard: fight lines (pull, signature, big cooldown) per fight
 Tune.SAME_TARGET_GAP = 600           -- repeat guard: seconds before the same creature/player gets another pull line
@@ -5336,7 +5513,10 @@ function Engine:HandlePlayerHealth()
             self.State.LowHealthArmed = false
             local reactions = self.ActiveProfile.SpellReactions
             local classPool = type(reactions) == "table" and reactions.Tier3_LowHP or nil
-            local deckKey, pool = self:PickLayeredPool("LowHP", "Spell_Tier3_LowHP", classPool, "low health")
+            local deckKey, pool = self:MoodPool("LowHP")
+            if not pool then
+                deckKey, pool = self:PickLayeredPool("LowHP", "Spell_Tier3_LowHP", classPool, "low health")
+            end
             if pool then
                 self.State.OathMoment = "LowHP"
                 pcall(self.ProcessTrigger, self, REACTION_TIERS.Tier3_LowHP, deckKey, pool, REACTION_CHANCE.Tier3_LowHP, nil)
@@ -5610,14 +5790,23 @@ function Engine:GetSignatureName(spellID)
     return type(name) == "string" and name or nil
 end
 
--- Returns name, entry for a signature spell, or nil for filler
+-- Returns name, entry, category, fromKind for a signature spell, or nil for filler. A spell with its
+-- own SpellLines keeps them (category is your Abilities-tab choice, if any); any other spell
+-- speaks from its kind's pool (see the Ability Mapper). "None" silences a spell.
 function Engine:GetSignatureEntry(spellID)
     local name = self:GetSignatureName(spellID)
+    if not name then return nil end
+    local category, how = self:GetAbilityCategory(name, spellID)
+    if category == "None" then return nil end
     local spellLines = self.ActiveProfile.SpellLines
-    if not name or type(spellLines) ~= "table" then return nil end
-    local entry = spellLines[name]
-    if type(entry) ~= "table" then return nil end
-    return name, entry
+    local entry = type(spellLines) == "table" and spellLines[name] or nil
+    if type(entry) == "table" then
+        return name, entry, (how == "chosen") and category or nil
+    end
+    if not category then return nil end
+    local pool = self:AbilityPool(category)
+    if not pool then return nil end
+    return name, pool, category, true
 end
 
 -- Returns deckKey, pool, label for a signature entry (nil if it has no usable lines)
@@ -5814,19 +6003,28 @@ end
 
 local EAT_DRINK_SPELLS = { food = true, drink = true, refreshment = true, ["food & drink"] = true }
 
-function Engine:SayMoment(moment, hardware, name)
-    if not MonologueDB or MonologueDB.momentLines == false then return false end
+-- force: said even with Everyday moments switched off (party banter answers)
+function Engine:SayMoment(moment, hardware, name, force)
+    if not MonologueDB or (MonologueDB.momentLines == false and not force) then return false end
     local own = type(self.ActiveProfile.Moments) == "table" and self.ActiveProfile.Moments[moment] or nil
     local pool = UsablePool(own) and own or (self.Data.MomentLines and self.Data.MomentLines[moment])
-    local settings = Tune.MOMENTS[moment]
+    local banterTopic = moment:match("^Banter_(.+)$")
+    if banterTopic and not UsablePool(own) then
+        pool = self.Data.BanterLines and self.Data.BanterLines[banterTopic]
+    end
+    -- Family pools (PetSummon_Imp) share their moment's chance and cooldown
+    local baseMoment = moment:match("^(Pet%a+)_%a+$") or moment
+    local settings = Tune.MOMENTS[baseMoment] or (banterTopic and Tune.BANTER_MOMENT)
     if not UsablePool(pool) or not settings then return false end
-    local categoryKey = "Moment_" .. moment
+    local categoryKey = "Moment_" .. baseMoment
     self.State.BareLine = true
     self.State.TokenTargetName = name
+    self.State.BanterTopic = (not banterTopic and Tune.BANTER_TOPICS[moment]) and moment or nil
     local ok, spoke = pcall(self.ProcessTrigger, self, Tune.IDENTITY_MOMENT_TIER, categoryKey, pool,
         settings.chance, nil, nil, nil, hardware)
     self.State.BareLine = nil
     self.State.TokenTargetName = nil
+    self.State.BanterTopic = nil
     if ok and spoke then
         self.Cooldowns.Categories[categoryKey] = GetTime() + settings.cooldown
         return true
@@ -5842,6 +6040,8 @@ function Engine:TryEverydayMoment(spellID, hardware)
     if EAT_DRINK_SPELLS[name:lower()] then
         return self:SayMoment("EatDrink", hardware)
     end
+    local gather = Tune.GATHER_SPELLS[name:lower()]
+    if gather then return self:SayMoment(gather, hardware) end
     if C_MountJournal and C_MountJournal.GetMountFromSpell then
         local ok, mountID = pcall(C_MountJournal.GetMountFromSpell, spellID)
         local inInstance = Clean((IsInInstance()))
@@ -5850,6 +6050,563 @@ function Engine:TryEverydayMoment(spellID, hardware)
         end
     end
     return false
+end
+
+-- NPC visits (flight master, mailbox, trainer, quest hand-in): background lines, out of combat
+function Engine:HandleNpcVisit(moment)
+    if not MonologueDB or not MonologueCharDB then return end
+    if UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then return end
+    local name = UnitExists("npc") and ShortName(Clean(UnitName("npc"))) or nil
+    -- Lines naming {target} need a name; without one only lines without it are used
+    self:SayMoment(moment, nil, name)
+end
+
+-- True when a unit with this name is your target, mouseover or focus, or has a nameplate
+-- (so it is close by, not shouting from across the zone)
+function Engine:IsNameNearby(name)
+    for _, unit in ipairs({ "target", "mouseover", "focus" }) do
+        if UnitExists(unit) and Clean(UnitName(unit)) == name then return true end
+    end
+    if C_NamePlate and C_NamePlate.GetNamePlates then
+        local ok, plates = pcall(C_NamePlate.GetNamePlates)
+        if ok and type(plates) == "table" then
+            for _, plate in ipairs(plates) do
+                local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+                if unit and Clean(UnitName(unit)) == name then return true end
+            end
+        end
+    end
+    return false
+end
+
+-- CHAT_MSG_MONSTER_YELL: now and then answer a creature or NPC yelling close by
+Tune.YELL_SAME_NPC_GAP = 1800
+function Engine:HandleMonsterYell(npcName)
+    if not MonologueDB or not MonologueCharDB or MonologueDB.npcYells == false then return end
+    npcName = Clean(npcName)
+    if type(npcName) ~= "string" or npcName == "" then return end
+    if self.State.InRestrictedEncounter or UnitIsDeadOrGhost("player") then return end
+    local now = GetTime()
+    local answered = self.State.YellAnswered or {}
+    self.State.YellAnswered = answered
+    if now - (answered[npcName] or -math.huge) < Tune.YELL_SAME_NPC_GAP then return end
+    if not self:IsNameNearby(npcName) then return end
+    if self:SayMoment("NpcYell", nil, ShortName(npcName) or npcName) then answered[npcName] = now end
+end
+
+---------------------------------------------------------------------------
+-- Moods (situations/Moods.lua): how your character feels today. Per character, set with
+-- /mono mood or on the My Voice tab. A share of greetings, idle, kill and low-health lines
+-- come from the mood's pool, and chattiness is nudged.
+---------------------------------------------------------------------------
+Tune.MOOD_SHARE = 0.4
+Tune.MOODS = { Grim = 0.85, Weary = 0.75, Cheerful = 1.1, Fierce = 1.0 } -- chattiness multiplier
+Tune.MOOD_ORDER = { "Grim", "Weary", "Cheerful", "Fierce" }
+
+function Engine:GetMood()
+    local mood = MonologueCharDB and MonologueCharDB.Mood
+    if type(mood) == "string" and Tune.MOODS[mood] then return mood end
+    return nil
+end
+
+-- name: a mood (any case), or nil / "off" / "normal" to clear. Returns the mood set, or false
+function Engine:SetMood(name)
+    if not MonologueCharDB then return false end
+    local wanted = type(name) == "string" and name:lower() or ""
+    if wanted == "" or wanted == "off" or wanted == "normal" or wanted == "none" then
+        MonologueCharDB.Mood = nil
+        return nil
+    end
+    for _, mood in ipairs(Tune.MOOD_ORDER) do
+        if mood:lower() == wanted then
+            MonologueCharDB.Mood = mood
+            return mood
+        end
+    end
+    return false
+end
+
+function Engine:MoodChattiness()
+    local mood = self:GetMood()
+    return mood and Tune.MOODS[mood] or 1
+end
+
+-- kind: Greet, Idle, Kill or LowHP. Returns deckKey, pool (a share of the time) or nil
+function Engine:MoodPool(kind)
+    local mood = self:GetMood()
+    if not mood or math.random() >= Tune.MOOD_SHARE then return nil end
+    local lines = self.Data.MoodLines and self.Data.MoodLines[mood]
+    local pool = type(lines) == "table" and lines[kind] or nil
+    if not UsablePool(pool) then return nil end
+    return "Mood_" .. mood .. "_" .. kind, pool
+end
+
+---------------------------------------------------------------------------
+-- Party banter: when you say a line aloud in a group, Monologue users nearby learn its topic
+-- ("B^Kill"). One of them, the same pick on every client, may answer you a moment later.
+---------------------------------------------------------------------------
+Tune.BANTER_CHANCE = 0.35
+Tune.BANTER_COOLDOWN = 180
+Tune.BANTER_MOMENT = { chance = 1, cooldown = 60 }
+Tune.BANTER_TOPICS = { Kill = true, Idle = true, EatDrink = true, Rest = true, Mount = true }
+
+function Engine:SendBanterTopic(topic)
+    if not MonologueDB or MonologueDB.partyBanter == false then return end
+    if not Tune.BANTER_TOPICS[topic] or not (IsInGroup and IsInGroup()) then return end
+    self:SendComm("B^" .. topic)
+end
+
+function Engine:HandleBanter(topic, sender)
+    if not MonologueDB or not MonologueCharDB or MonologueDB.partyBanter == false then return end
+    if not Tune.BANTER_TOPICS[topic] or UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then return end
+    local ok, visible = pcall(UnitIsVisible, sender)
+    if not ok or not Clean(visible) then return end
+    -- The answerer: Monologue users in the group other than the speaker, in name order,
+    -- turning over every minute, so every client agrees and only one answers
+    local me = ShortName(UnitName("player"))
+    if not me or me == sender then return end
+    local names = { me }
+    for name in pairs(self.State.PartyIdentities or {}) do
+        if name ~= sender and name ~= me then names[#names + 1] = name end
+    end
+    table.sort(names)
+    local pick = names[(math.floor((GetServerTime and GetServerTime() or time()) / 60) % #names) + 1]
+    if pick ~= me then return end
+    local now = GetTime()
+    if now - (self.State.BanterAt or -math.huge) < Tune.BANTER_COOLDOWN then return end
+    if math.random() >= Tune.BANTER_CHANCE then return end
+    self:Debug("party banter: answering " .. sender .. " (" .. topic .. ")")
+    C_Timer.After(1.5 + math.random() * 2, function()
+        Engine.State.SpeakKind = "party"
+        local said = Engine:SayMoment("Banter_" .. topic, nil, sender, true)
+        Engine.State.SpeakKind = nil
+        if said then Engine.State.BanterAt = GetTime() end
+    end)
+end
+
+---------------------------------------------------------------------------
+-- /mono say <kind> [chance]: a line on demand, for your own macros (a slash command from a
+-- macro is a key press, so it can be said aloud). Cooldowns and the breath lock still apply.
+---------------------------------------------------------------------------
+Tune.SAY_KINDS = { idle = "Idle", kill = "Kill", pull = "Combat", hurt = "LowHP",
+    interrupt = "Interrupt", heal = "Heal", defend = "Defend" }
+Tune.SAY_COOLDOWN = 30
+
+function Engine:SayOnDemand(kind, chanceText)
+    kind = type(kind) == "string" and kind:lower() or ""
+    local chance = tonumber(chanceText or "") or 100
+    if chance <= 0 or math.random() * 100 >= chance then return false end
+    if kind == "cry" then return self:BattleCry() end
+    if kind == "greet" then return self:GreetNow() end
+    local layer = Tune.SAY_KINDS[kind]
+    if not layer then
+        Print("Usage: /mono say <idle|kill|pull|hurt|interrupt|heal|defend|greet|cry> [chance %]")
+        return false
+    end
+    local inCombat = UnitAffectingCombat("player")
+    if inCombat and kind ~= "kill" then
+        local allowed, why = self:FightLineAllowed(nil, nil, false)
+        if not allowed then
+            self:Debug("/mono say " .. kind .. " skipped: " .. why)
+            return false
+        end
+    end
+    local deckKey, pool
+    if layer == "Interrupt" or layer == "Heal" or layer == "Defend" then
+        local own = type(self.ActiveProfile.Moments) == "table" and self.ActiveProfile.Moments[layer] or nil
+        pool = UsablePool(own) and own or (self.Data.MomentLines and self.Data.MomentLines[layer])
+        deckKey = "Moment_" .. layer
+    elseif layer == "LowHP" then
+        deckKey, pool = self:MoodPool("LowHP")
+        if not pool then
+            local reactions = self.ActiveProfile.SpellReactions
+            local classPool = type(reactions) == "table" and reactions.Tier3_LowHP or nil
+            deckKey, pool = self:PickLayeredPool("LowHP", "Spell_Tier3_LowHP", classPool, "low health")
+        end
+    else
+        deckKey, pool = self:PickIdentityPool(layer)
+    end
+    if not UsablePool(pool) then return false end
+    self.State.OathMoment = (layer == "Kill" and "Kill") or (layer == "LowHP" and "LowHP") or nil
+    local ok, spoke = pcall(self.SpeakIdentityLine, self, "Say_" .. kind, pool, Tune.SAY_COOLDOWN, true, deckKey)
+    self.State.OathMoment = nil
+    spoke = ok and spoke
+    if spoke and inCombat and kind ~= "kill" then self:NoteFightLine(nil, nil) end
+    return spoke
+end
+
+---------------------------------------------------------------------------
+-- Ability Mapper (Abilities tab, /mono map). Spells with their own SpellLines keep them; any
+-- other spell you cast may speak from a shared pool for its kind (situations/Abilities.lua):
+--   Attack                    a harmful spell: may open a fight, like a signature move
+--   Burst                     a big cooldown (your choice only): may also speak mid-fight
+--   Defend, Interrupt, Heal   may also speak mid-fight now and then
+--   None                      never speaks, even a spell with its own lines
+-- MonologueCharDB.AbilityMap[name] holds your choices, AbilityEvery[name] = N speaks on every
+-- Nth cast only, and SeenSpells[name] = { id, at } lists the spells you have cast (the
+-- tab's rows). The fight limits (2 lines a fight, each move once) still apply.
+---------------------------------------------------------------------------
+Tune.ABILITY_CATEGORIES = { "Attack", "Burst", "Defend", "Interrupt", "Heal" }
+Tune.ABILITY_MID_CHANCE = { Burst = 0.5, Defend = 0.3, Interrupt = 0.3, Heal = 0.2 }
+Tune.ABILITY_EVERY = { 1, 2, 3, 5, 10 }
+Tune.SEEN_SPELLS_MAX = 120
+Tune.INTERRUPT_SPELLS = { kick = true, pummel = true, ["shield bash"] = true, counterspell = true,
+    ["earth shock"] = true }
+Tune.HEAL_WORDS = { "heal", "mend", "renew", "regrowth", "rejuvenation", "holy light", "flash of light" }
+Tune.ABILITY_SKIP = { attack = true, ["auto shot"] = true, shoot = true }
+Tune.POOL_KEYS_MAX = 40
+
+-- "harm", "help" or nil (unknown, or neither: food, mounts, gathering)
+function Engine:SpellKind(spellID)
+    if type(spellID) ~= "number" then return nil end
+    if C_Spell and C_Spell.IsSpellHarmful then
+        local ok, harmful = pcall(C_Spell.IsSpellHarmful, spellID)
+        if ok and Clean(harmful) then return "harm" end
+    end
+    if C_Spell and C_Spell.IsSpellHelpful then
+        local ok, helpful = pcall(C_Spell.IsSpellHelpful, spellID)
+        if ok and Clean(helpful) then return "help" end
+    end
+    return nil
+end
+
+-- "attack" -> "Attack"; also "None" and "Auto". nil when it isn't one.
+function Engine:NormalizeAbilityCategory(value)
+    if type(value) ~= "string" then return nil end
+    local lower = value:lower()
+    if lower == "none" or lower == "off" or lower == "silent" then return "None" end
+    if lower == "auto" then return "Auto" end
+    if lower == "defensive" or lower == "defense" or lower == "defence" then return "Defend" end
+    for _, category in ipairs(Tune.ABILITY_CATEGORIES) do
+        if category:lower() == lower then return category end
+    end
+    return nil
+end
+
+-- The kind a spell gets without your choice: Interrupt (by name), Heal (a helpful spell
+-- with a healing name) or Attack (a harmful spell). nil = silent.
+function Engine:AutoAbilityCategory(name, spellID)
+    if type(name) ~= "string" then return nil end
+    local lower = name:lower()
+    if Tune.ABILITY_SKIP[lower] then return nil end
+    if Tune.INTERRUPT_SPELLS[lower] then return "Interrupt" end
+    local kind = self:SpellKind(spellID)
+    if kind == "harm" then return "Attack" end
+    if kind == "help" then
+        for _, word in ipairs(Tune.HEAL_WORDS) do
+            if lower:find(word, 1, true) then return "Heal" end
+        end
+    end
+    return nil
+end
+
+-- Returns category, how ("chosen" or "auto"), or nil
+function Engine:GetAbilityCategory(name, spellID)
+    local map = MonologueCharDB and MonologueCharDB.AbilityMap
+    local chosen = type(map) == "table" and map[name] or nil
+    if chosen == "None" or chosen == "Attack" or Tune.ABILITY_MID_CHANCE[chosen or ""] then
+        return chosen, "chosen"
+    end
+    if MonologueDB and MonologueDB.abilityAuto == false then return nil end
+    return self:AutoAbilityCategory(name, spellID), "auto"
+end
+
+-- The lines for a kind: the profile's own AbilityLines, then moment pools of the same name
+-- (Defend, Interrupt, Heal), then the shared ones
+function Engine:AbilityPool(category)
+    local own = type(self.ActiveProfile.AbilityLines) == "table" and self.ActiveProfile.AbilityLines[category] or nil
+    if UsablePool(own) then return own end
+    local moments = self.ActiveProfile.Moments
+    if type(moments) == "table" and UsablePool(moments[category]) then return moments[category] end
+    local shared = self.Data.AbilityLines and self.Data.AbilityLines[category]
+    if UsablePool(shared) then return shared end
+    shared = self.Data.MomentLines and self.Data.MomentLines[category]
+    return UsablePool(shared) and shared or nil
+end
+
+-- Every cast: counted (for "every Nth cast") and listed on the Abilities tab. The press
+-- hook and the cast event both report a cast, so a repeat within half a second is the same one.
+function Engine:NoteCast(spellID)
+    spellID = Clean(spellID)
+    if type(spellID) ~= "number" or not MonologueCharDB then return end
+    local name = self:GetSignatureName(spellID)
+    if not name then return end
+    local state = self.State
+    state.CastCounts = state.CastCounts or {}
+    local count = state.CastCounts[name]
+    local now = GetTime()
+    if count and now - count.at < 0.5 then return end
+    if not count then
+        count = { n = 0 }
+        state.CastCounts[name] = count
+    end
+    count.n, count.at = count.n + 1, now
+
+    -- Only spells that could speak are listed
+    local spellLines = self.ActiveProfile.SpellLines
+    local own = type(spellLines) == "table" and type(spellLines[name]) == "table"
+    if not own and not self:SpellKind(spellID) then return end
+    local seen = MonologueCharDB.SeenSpells
+    if type(seen) ~= "table" then
+        seen = {}
+        MonologueCharDB.SeenSpells = seen
+    end
+    local isNew = seen[name] == nil
+    seen[name] = { id = spellID, at = GetServerTime and GetServerTime() or 0 }
+    if isNew then
+        local total, oldestName, oldestAt = 0, nil, math.huge
+        for key, info in pairs(seen) do
+            total = total + 1
+            local at = type(info) == "table" and tonumber(info.at) or 0
+            if at < oldestAt then oldestName, oldestAt = key, at end
+        end
+        if total > Tune.SEEN_SPELLS_MAX and oldestName then seen[oldestName] = nil end
+        if MonologueUI and MonologueUI.OnAbilitiesChanged then pcall(MonologueUI.OnAbilitiesChanged, MonologueUI) end
+    end
+end
+
+-- "Every Nth cast": true when this cast of the spell may speak
+function Engine:CastTurnAllowed(name)
+    local every = self:GetAbilityEvery(name)
+    if every <= 1 then return true end
+    local count = self.State.CastCounts and self.State.CastCounts[name]
+    local n = count and count.n or 0
+    if n % every == 0 then return true end
+    self:Debug(name .. ": quiet this cast (speaks every " .. every .. " casts)")
+    return false
+end
+
+function Engine:GetAbilityChoice(name)
+    local map = MonologueCharDB and MonologueCharDB.AbilityMap
+    return type(map) == "table" and map[name] or "Auto"
+end
+
+function Engine:SetAbilityCategory(name, category)
+    category = self:NormalizeAbilityCategory(category)
+    if type(name) ~= "string" or not category or not MonologueCharDB then return false end
+    if type(MonologueCharDB.AbilityMap) ~= "table" then MonologueCharDB.AbilityMap = {} end
+    MonologueCharDB.AbilityMap[name] = (category ~= "Auto") and category or nil
+    return true
+end
+
+function Engine:GetAbilityEvery(name)
+    local every = MonologueCharDB and type(MonologueCharDB.AbilityEvery) == "table"
+        and tonumber(MonologueCharDB.AbilityEvery[name]) or 1
+    return math.max(1, math.floor(every))
+end
+
+function Engine:SetAbilityEvery(name, every)
+    if type(name) ~= "string" or not MonologueCharDB then return false end
+    every = math.floor(tonumber(every) or 1)
+    if type(MonologueCharDB.AbilityEvery) ~= "table" then MonologueCharDB.AbilityEvery = {} end
+    MonologueCharDB.AbilityEvery[name] = every > 1 and every or nil
+    return true
+end
+
+-- What a spell does without your choice: "own lines", a kind, or "silent"
+function Engine:DescribeAbility(name)
+    local spellLines = self.ActiveProfile.SpellLines
+    if type(spellLines) == "table" and type(spellLines[name]) == "table" then return "own lines" end
+    if MonologueDB and MonologueDB.abilityAuto == false then return "silent" end
+    local seen = MonologueCharDB and MonologueCharDB.SeenSpells
+    local info = type(seen) == "table" and seen[name]
+    local id = type(info) == "table" and tonumber(info.id) or nil
+    return self:AutoAbilityCategory(name, id) or "silent"
+end
+
+-- Sorted names of the spells you have cast
+function Engine:GetSeenSpells()
+    local names = {}
+    local seen = MonologueCharDB and MonologueCharDB.SeenSpells
+    for name in pairs(type(seen) == "table" and seen or {}) do
+        if type(name) == "string" then names[#names + 1] = name end
+    end
+    table.sort(names)
+    return names
+end
+
+-- A typed spell name ("swipe") as the name lines use ("Swipe"), or nil
+function Engine:ResolveSpellName(text)
+    if type(text) ~= "string" then return nil end
+    text = strtrim(text)
+    if text == "" then return nil end
+    local lower = text:lower()
+    for _, name in ipairs(self:GetSeenSpells()) do
+        if name:lower() == lower then return name end
+    end
+    local spellLines = self.ActiveProfile.SpellLines
+    if type(spellLines) == "table" then
+        for name in pairs(spellLines) do
+            if type(name) == "string" and name:lower() == lower then return name end
+        end
+    end
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, text)
+        local name = ok and type(info) == "table" and Clean(info.name) or nil
+        if type(name) == "string" then return name end
+    end
+    return nil
+end
+
+-- True for "Spell:<name>", "Moment:<known moment>" and "Ability:<kind>"
+function Engine:ValidPoolKey(poolKey)
+    if type(poolKey) ~= "string" then return false end
+    local kind, key = poolKey:match("^(%a+):(.+)$")
+    if kind == "Spell" then return #key <= 40 end
+    if kind == "Moment" then
+        return Tune.MOMENTS[key] ~= nil or (self.Data.MomentLines and self.Data.MomentLines[key] ~= nil) or false
+    end
+    if kind == "Ability" then
+        local category = self:NormalizeAbilityCategory(key)
+        return category == key and category ~= "None" and category ~= "Auto"
+    end
+    return false
+end
+
+-- Every everyday moment key, sorted (the Abilities tab's "My Lines" list)
+function Engine:GetMomentKeys()
+    local keys = {}
+    for key in pairs(Tune.MOMENTS) do keys[#keys + 1] = key end
+    table.sort(keys)
+    return keys
+end
+
+-- Dungeon quiet (Abilities tab): automatic lines a quarter as often in dungeons, none in raids
+Tune.DUNGEON_QUIET = 0.25
+function Engine:PlaceChattiness()
+    if not (MonologueDB and MonologueDB.dungeonQuiet) then return 1 end
+    local _, instanceType = IsInInstance()
+    instanceType = Clean(instanceType)
+    if instanceType == "raid" then return 0 end
+    if instanceType == "party" or instanceType == "scenario" then return Tune.DUNGEON_QUIET end
+    return 1
+end
+
+---------------------------------------------------------------------------
+-- Gathering, mishaps and pets (everyday moments, situations/Moments.lua)
+---------------------------------------------------------------------------
+Tune.MOMENTS.Mining = { chance = 0.12, cooldown = 900 }
+Tune.MOMENTS.Herbalism = { chance = 0.12, cooldown = 900 }
+Tune.MOMENTS.Skinning = { chance = 0.12, cooldown = 900 }
+Tune.MOMENTS.Fishing = { chance = 0.12, cooldown = 900 }
+Tune.MOMENTS.Crafting = { chance = 0.20, cooldown = 1800 }
+Tune.MOMENTS.Merchant = { chance = 0.15, cooldown = 1800 }
+Tune.MOMENTS.BagsFull = { chance = 0.50, cooldown = 900 }
+Tune.MOMENTS.Drowning = { chance = 0.60, cooldown = 600 }
+Tune.MOMENTS.Fall = { chance = 0.50, cooldown = 300 }
+Tune.MOMENTS.PetSummon = { chance = 0.25, cooldown = 600 }
+Tune.MOMENTS.PetDown = { chance = 0.60, cooldown = 300 }
+-- Gathering casts by (lower-case) spell name
+Tune.GATHER_SPELLS = { mining = "Mining", ["herb gathering"] = "Herbalism", skinning = "Skinning",
+    fishing = "Fishing" }
+Tune.FALL_MIN_TIME = 1.5       -- seconds in the air before a landing counts
+Tune.FALL_MIN_LOSS = 0.10      -- share of your health the landing must cost
+Tune.PET_RETURN_QUIET = 20     -- the same pet back within this many seconds (zoning) says nothing
+
+-- UI_ERROR_MESSAGE: "Inventory is full" and the like
+function Engine:HandleUiError(first, second)
+    local message = Clean(type(second) == "string" and second or first)
+    if type(message) ~= "string" then return end
+    if message ~= _G.ERR_INV_FULL and message ~= _G.ERR_BAG_FULL then return end
+    if UnitIsDeadOrGhost("player") then return end
+    self:SayMoment("BagsFull", nil)
+end
+
+-- MIRROR_TIMER_START / _STOP for the breath bar: a line once half your air is gone
+function Engine:HandleMirrorTimer(event, timerName, value, _, scale)
+    if Clean(timerName) ~= "BREATH" then return end
+    local state = self.State
+    scale = tonumber(Clean(scale))
+    -- Stopped, or filling up again (back at the surface)
+    if event == "MIRROR_TIMER_STOP" or (scale and scale > 0) then
+        state.BreathToken = nil
+        return
+    end
+    local token = {}
+    state.BreathToken = token
+    local left = (tonumber(Clean(value)) or 60000) / 1000
+    C_Timer.After(math.max(1, left * 0.5), function()
+        if state.BreathToken ~= token then return end
+        state.BreathToken = nil
+        if UnitIsDeadOrGhost("player") then return end
+        -- Back at the surface by now (in case the client didn't report it)
+        if IsSwimming and not Clean(IsSwimming()) then return end
+        Engine:SayMoment("Drowning", nil)
+    end)
+end
+
+-- Falling (checked a few times a second): a long fall whose landing hurt
+function Engine:CheckFalling()
+    if type(IsFalling) ~= "function" then return end
+    local state = self.State
+    if Clean(IsFalling()) then
+        if not state.FallStart then
+            state.FallStart = GetTime()
+            local hp = Clean(UnitHealth("player"))
+            state.FallHealth = type(hp) == "number" and hp or nil
+        end
+        return
+    end
+    local started, before = state.FallStart, state.FallHealth
+    if not started then return end
+    state.FallStart, state.FallHealth = nil, nil
+    if GetTime() - started < Tune.FALL_MIN_TIME or not before then return end
+    -- The damage lands a moment after you do
+    C_Timer.After(0.4, function()
+        local hp, maxHp = Clean(UnitHealth("player")), Clean(UnitHealthMax("player"))
+        if type(hp) ~= "number" or type(maxHp) ~= "number" or maxHp <= 0 or hp <= 0 then return end
+        if UnitIsDeadOrGhost("player") then return end
+        if (before - hp) / maxHp >= Tune.FALL_MIN_LOSS then Engine:SayMoment("Fall", nil) end
+    end)
+end
+
+-- A family pool (PetSummon_Imp) when there is one, else the general moment
+function Engine:SayPetMoment(moment, name)
+    local family = UnitCreatureFamily and Clean(UnitCreatureFamily("pet"))
+    if type(family) == "string" then
+        local key = moment .. "_" .. family:gsub("%W", "")
+        local own = type(self.ActiveProfile.Moments) == "table" and self.ActiveProfile.Moments[key]
+        local shared = self.Data.MomentLines and self.Data.MomentLines[key]
+        if UsablePool(own) or UsablePool(shared) then return self:SayMoment(key, nil, name) end
+    end
+    return self:SayMoment(moment, nil, name)
+end
+
+-- UNIT_PET (and PLAYER_ENTERING_WORLD, which resets PetReady): a pet summoned
+function Engine:HandlePetChanged()
+    local state = self.State
+    local name = UnitExists("pet") and ShortName(Clean(UnitName("pet"))) or nil
+    local previous = state.PetName
+    if not state.PetReady then
+        -- First reading after login or a loading screen: remember the pet, say nothing
+        state.PetReady = true
+        state.PetName = name
+        state.PetDead = name ~= nil and Clean(UnitIsDead("pet")) and true or false
+        return
+    end
+    if not name then
+        if previous then state.PetGoneName, state.PetGoneAt = previous, GetTime() end
+        state.PetName = nil
+        return
+    end
+    if name == previous then return end
+    state.PetName = name
+    state.PetDead = Clean(UnitIsDead("pet")) and true or false
+    if state.PetGoneName == name and GetTime() - (state.PetGoneAt or 0) < Tune.PET_RETURN_QUIET then return end
+    if state.PetDead or UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then return end
+    self:SayPetMoment("PetSummon", name)
+end
+
+-- UNIT_HEALTH for the pet: it just died
+function Engine:HandlePetHealth()
+    if not UnitExists("pet") then return end
+    local state = self.State
+    local dead = Clean(UnitIsDead("pet")) and true or false
+    local was = state.PetDead
+    state.PetDead = dead
+    if dead and was == false then
+        self:SayPetMoment("PetDown", ShortName(Clean(UnitName("pet"))))
+    end
 end
 
 -- PLAYER_UPDATE_RESTING: walking into an inn or a city. The first reading after login is silent.
@@ -5897,6 +6654,7 @@ function Engine:HandleSpellcast(spellID, hardware)
             Print(string.format("Cast: %s (ID %d)", GetSpellNameSafe(spellID) or "?", spellID))
         end
         if UnitAffectingCombat("player") then self:MarkEngaged() end
+        pcall(self.NoteCast, self, spellID)
 
         -- The press already spoke (or chose silence) for this cast: no second pass
         local handled = self.State.PressHandled
@@ -5923,7 +6681,7 @@ function Engine:HandleSpellcast(spellID, hardware)
         self:MarkEngaged()
     end
 
-    local sigName, sigEntry = self:GetSignatureEntry(spellID)
+    local sigName, sigEntry, sigCategory = self:GetSignatureEntry(spellID)
 
     -- Everyday moments: food, drink, a mount (out of combat)
     if not inCombat and not sigName and self:TryEverydayMoment(spellID, castRoute) then return end
@@ -5933,10 +6691,12 @@ function Engine:HandleSpellcast(spellID, hardware)
 
     -- Filler moves never speak
     if not sigName then return end
+    -- Every Nth cast (Abilities tab): quiet until this cast's turn comes round
+    if not self:CastTurnAllowed(sigName) then return end
 
     -- Pull pacing against mobs (see GetPullPacing)
     local mobTarget = hostileTarget and not UnitIsPlayer("target")
-    if mobTarget and (IsOffensiveSpell(spellID) or sigEntry.big) then
+    if mobTarget and (IsOffensiveSpell(spellID) or sigEntry.big or sigCategory == "Burst") then
         local state = self.State
         self:EnsurePullTarget()
         if not inCombat then
@@ -5955,7 +6715,9 @@ function Engine:HandleSpellcast(spellID, hardware)
     -- Mid-fight: a big cooldown may speak on its own; against players any signature move may
     local deckKey, pool = self:ResolveSpellPool(sigName, sigEntry, targetUnit)
     if not pool or not inCombat then return end
-    if not (sigEntry.big or (hostileTarget and not mobTarget)) then return end
+    local isBig = sigEntry.big or sigCategory == "Burst"
+    local midChance = sigCategory and Tune.ABILITY_MID_CHANCE[sigCategory]
+    if not (isBig or midChance or (hostileTarget and not mobTarget)) then return end
     local allowed, why = self:FightLineAllowed(sigName, targetUnit, false)
     if not allowed then
         self:Debug("signature line skipped: " .. why)
@@ -5963,8 +6725,10 @@ function Engine:HandleSpellcast(spellID, hardware)
     end
     local spoke
     self.State.CurrentSpell = sigName
-    if sigEntry.big then
+    if isBig then
         spoke = self:ProcessTrigger(1, deckKey, pool, BIG_SPELL_CHANCE, targetUnit, nil, "SAY", castRoute)
+    elseif midChance and not (hostileTarget and not mobTarget) then
+        spoke = self:ProcessTrigger(2, deckKey, pool, midChance, targetUnit, nil, "SAY", castRoute)
     else
         spoke = self:ProcessTrigger(2, deckKey, pool, PVP_SPELL_CHANCE, targetUnit, nil, "SAY", castRoute)
     end
@@ -6070,6 +6834,7 @@ function Engine:HandleAbilityPress(spellID, source)
 
     -- From here this press owns the cast: the UNIT_SPELLCAST_SENT pass won't speak for it
     state.PressHandled = { spellID = spellID, at = now }
+    pcall(self.NoteCast, self, spellID)
 
     -- A waiting line (a greeting, a duel or PvP reaction) goes out on this press, spacing or not
     if state.Pending then
@@ -6081,9 +6846,12 @@ function Engine:HandleAbilityPress(spellID, source)
 
     -- Filler moves (Heroic Strike, Rend, ...) never speak in a fight. Out of combat with no
     -- enemy targeted, any press may carry idle chatter (clan, profession) now and then.
-    local isSignature = self:GetSignatureEntry(spellID) ~= nil
     local idleMoment = not UnitAffectingCombat("player")
         and not (UnitExists("target") and UnitCanAttack("player", "target"))
+    -- A spell that speaks only for its kind (a heal, an attack) has nothing to say out of a
+    -- fight, so out of combat it carries idle chatter like any other press
+    local sigName, _, _, fromKind = self:GetSignatureEntry(spellID)
+    local isSignature = sigName ~= nil and not (fromKind and idleMoment)
     if not isSignature and not idleMoment then return end
     local gap = MonologueDB.pressVoice.gap or 120
     local since = now - (state.LastPressLineAt or -math.huge)
@@ -6215,6 +6983,16 @@ SafeRegisterEvent(frame, "CHAT_MSG_TEXT_EMOTE")
 SafeRegisterEvent(frame, "ZONE_CHANGED_NEW_AREA")
 SafeRegisterEvent(frame, "ZONE_CHANGED")
 SafeRegisterEvent(frame, "LOOT_OPENED")
+SafeRegisterEvent(frame, "TAXIMAP_OPENED")
+SafeRegisterEvent(frame, "MAIL_SHOW")
+SafeRegisterEvent(frame, "TRAINER_SHOW")
+SafeRegisterEvent(frame, "QUEST_COMPLETE")
+SafeRegisterEvent(frame, "MERCHANT_SHOW")
+SafeRegisterEvent(frame, "TRADE_SKILL_SHOW")
+SafeRegisterEvent(frame, "UI_ERROR_MESSAGE")
+SafeRegisterEvent(frame, "MIRROR_TIMER_START")
+SafeRegisterEvent(frame, "MIRROR_TIMER_STOP")
+SafeRegisterEvent(frame, "CHAT_MSG_MONSTER_YELL")
 SafeRegisterEvent(frame, "SKILL_LINES_CHANGED")
 SafeRegisterEvent(frame, "UPDATE_INVENTORY_DURABILITY")
 SafeRegisterEvent(frame, "GROUP_ROSTER_UPDATE")
@@ -6230,6 +7008,36 @@ do
     allyFrame:SetScript("OnEvent", function(_, _, unit)
         if type(unit) ~= "string" or unit:sub(1, 5) ~= "party" or not MonologueDB then return end
         if unit:find("^party%d$") then pcall(Engine.CheckAllyDown, Engine, unit) end
+    end)
+end
+-- Pets: summoned (UNIT_PET) or fallen (the pet's health). A loading screen resets the
+-- watch so the pet coming back with you says nothing.
+do
+    local petFrame = CreateFrame("Frame")
+    pcall(petFrame.RegisterUnitEvent, petFrame, "UNIT_PET", "player")
+    pcall(petFrame.RegisterUnitEvent, petFrame, "UNIT_HEALTH", "pet")
+    SafeRegisterEvent(petFrame, "PLAYER_ENTERING_WORLD")
+    petFrame:SetScript("OnEvent", function(_, event)
+        if not MonologueDB or not MonologueCharDB then return end
+        if event == "PLAYER_ENTERING_WORLD" then Engine.State.PetReady = false end
+        if event == "UNIT_HEALTH" then
+            pcall(Engine.HandlePetHealth, Engine)
+        else
+            pcall(Engine.HandlePetChanged, Engine)
+        end
+    end)
+end
+-- Falling has no event: checked a few times a second
+do
+    local fallFrame = CreateFrame("Frame")
+    local elapsed = 0
+    fallFrame:SetScript("OnUpdate", function(_, delta)
+        elapsed = elapsed + delta
+        if elapsed < 0.25 then return end
+        elapsed = 0
+        if MonologueDB and MonologueCharDB and MonologueDB.momentLines ~= false then
+            pcall(Engine.CheckFalling, Engine)
+        end
     end)
 end
 
@@ -6433,6 +7241,23 @@ frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "LOOT_OPENED" then
         if MonologueDB and MonologueCharDB then Engine:HandleLootOpened() end
 
+    elseif event == "TAXIMAP_OPENED" or event == "MAIL_SHOW" or event == "TRAINER_SHOW" or event == "QUEST_COMPLETE"
+        or event == "MERCHANT_SHOW" or event == "TRADE_SKILL_SHOW" then
+        local moment = (event == "TAXIMAP_OPENED" and "FlightMaster") or (event == "MAIL_SHOW" and "Mailbox")
+            or (event == "TRAINER_SHOW" and "Trainer") or (event == "MERCHANT_SHOW" and "Merchant")
+            or (event == "TRADE_SKILL_SHOW" and "Crafting") or "QuestDone"
+        pcall(Engine.HandleNpcVisit, Engine, moment)
+
+    elseif event == "UI_ERROR_MESSAGE" then
+        if MonologueDB and MonologueCharDB then pcall(Engine.HandleUiError, Engine, ...) end
+
+    elseif event == "MIRROR_TIMER_START" or event == "MIRROR_TIMER_STOP" then
+        if MonologueDB and MonologueCharDB then pcall(Engine.HandleMirrorTimer, Engine, event, ...) end
+
+    elseif event == "CHAT_MSG_MONSTER_YELL" then
+        local _, npcName = ...
+        pcall(Engine.HandleMonsterYell, Engine, npcName)
+
     elseif event == "SKILL_LINES_CHANGED" then
         Engine.State.ProfessionCache = nil
 
@@ -6583,6 +7408,7 @@ local function PrintStatus()
     Print("Safe-Mode: " .. (state.InRestrictedEncounter and "|cffff8800ACTIVE|r" or "off")
         .. " | Breath lock: " .. string.format("%.0fs", breathLeft)
         .. " | Background speech: " .. tostring(MonologueDB.backgroundSpeech)
+        .. " | Mood: " .. (Engine:GetMood() or "normal")
         )
     local _, _, pacing = Engine:GetPullPacing()
     Print("Combat pacing vs mobs: one /s line " .. pacing .. " | " .. Engine:DescribePullProgress())
@@ -6663,6 +7489,11 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage("  /mono greet - say hello to your friendly player target now (or say a waiting greeting)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono ic | ooc - in character (translate, speak) or out of character (also a keybind)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono keep <word> | unkeep <word> - words that are never translated (/mono keep lists them)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono mood <grim|weary|cheerful|fierce|off> - how your character feels today")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono say <idle|kill|pull|hurt|interrupt|heal|defend|greet|cry> [chance %] - a line on demand, for macros")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono map <spell> <attack|burst|defend|interrupt|heal|none|auto> - what kind of move a spell is (/mono map lists yours)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono test <text> - show what a message would turn into, without sending it")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono abilities - open the Abilities tab (spell kinds, your own lines, pacing)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono lines - open the Voice Lines tab (where and how often /s lines are said)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono voice - open the My Voice tab (custom oaths, swaps, battle cries, export/import)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono roster - open the Rivals & Friends roster window")
@@ -6687,7 +7518,8 @@ SlashCmdList["MONOLOGUE"] = function(msg)
 
     -- Using a /mono command (or the HUD and minimap buttons that run one) is a hardware
     -- event: say a line that was held back from a background event
-    if cmd ~= "greet" then Engine:FlushPendingSpeech("slash") end
+    local flushed = false
+    if cmd ~= "greet" then flushed = Engine:FlushPendingSpeech("slash") end
 
     if cmd == "ui" or cmd == "config" or cmd == "" then
         if MonologueUI and MonologueUI.Toggle then
@@ -6932,6 +7764,69 @@ SlashCmdList["MONOLOGUE"] = function(msg)
 
     elseif cmd == "greet" then
         Engine:GreetNow()
+
+    elseif cmd == "say" then
+        -- One line per key press: a waiting line just said takes this press
+        if not flushed then
+            local kind, chance = strsplit(" ", arg or "", 2)
+            Engine:SayOnDemand(kind, chance)
+        end
+
+    elseif cmd == "map" then
+        if not arg or arg == "" then
+            local choices = {}
+            for name, category in pairs(MonologueCharDB.AbilityMap or {}) do
+                choices[#choices + 1] = tostring(name) .. " = " .. tostring(category)
+            end
+            table.sort(choices)
+            Print(#choices > 0 and ("Your ability choices: " .. table.concat(choices, ", "))
+                or "No ability choices yet. /mono map <spell name> <attack|burst|defend|interrupt|heal|none|auto>")
+        else
+            local spellText, categoryText = arg:match("^(.-)%s+(%S+)$")
+            local category = Engine:NormalizeAbilityCategory(categoryText)
+            local name = category and Engine:ResolveSpellName(spellText)
+            if not category then
+                Print("Usage: /mono map <spell name> <attack|burst|defend|interrupt|heal|none|auto>")
+            elseif not name then
+                Print("No spell called '" .. tostring(spellText) .. "'. Cast it once, or check the spelling.")
+            else
+                Engine:SetAbilityCategory(name, category)
+                Print(name .. ": " .. (category == "Auto" and ("automatic (" .. Engine:DescribeAbility(name) .. ")") or category) .. ".")
+                if MonologueUI and MonologueUI.OnAbilitiesChanged then pcall(MonologueUI.OnAbilitiesChanged, MonologueUI) end
+            end
+        end
+
+    elseif cmd == "test" then
+        local translator = MonologueTranslator
+        if not arg or arg == "" then
+            Print("Usage: /mono test <text> - shows what a message would turn into, without sending it")
+        elseif not (translator and translator.Translate) then
+            Print("The translator is not loaded.")
+        else
+            local intensity = translator.GetChannelIntensity and translator:GetChannelIntensity("SAY") or 0
+            if intensity <= 0 then intensity = MonologueDB.translationIntensity or 2 end
+            translator.TypedChat = true
+            local ok, out = pcall(translator.Translate, translator, arg, intensity)
+            translator.TypedChat = nil
+            Print(ok and ("Would say: " .. tostring(out)) or "The translator could not read that.")
+            if not MonologueDB.fixTypos then Print("|cff888888(Typo fixes are off: General tab.)|r") end
+        end
+
+    elseif cmd == "abilities" then
+        if MonologueUI and MonologueUI.ShowTab then MonologueUI:ShowTab("abilities") end
+
+    elseif cmd == "mood" then
+        if not arg or arg == "" then
+            Print("Mood: " .. (Engine:GetMood() or "normal") .. ". /mono mood <grim|weary|cheerful|fierce|off>")
+        else
+            local mood = Engine:SetMood(arg)
+            if mood == false then
+                Print("Moods: grim, weary, cheerful, fierce (or off).")
+            else
+                Print("Mood: " .. (mood or "normal") .. ".")
+                if MonologueUI and MonologueUI.OnVoiceChanged then pcall(MonologueUI.OnVoiceChanged, MonologueUI) end
+            end
+        end
 
     elseif cmd == "ic" then
         Engine:SetInCharacter(true)

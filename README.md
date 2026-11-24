@@ -9,6 +9,7 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 ---
 
 ## Contents
+- [What's new in 0.1.4](#whats-new-in-014)
 - [What's new in 0.1.3](#whats-new-in-013)
 - [Install](#install)
 - [Updating](#updating)
@@ -17,11 +18,28 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
   - [General tab](#general-tab)
   - [Voice Lines tab](#voice-lines-tab)
   - [My Voice tab (character builder)](#my-voice-tab-character-builder)
+  - [Abilities tab](#abilities-tab)
   - [Rivals & Friends (roster)](#rivals--friends-roster)
 - [Slash commands](#slash-commands)
 - [FAQ & troubleshooting](#faq--troubleshooting)
 
 ---
+
+## What's new in 0.1.4
+
+- **New Abilities tab: every spell can speak.** Spells without lines of their own now speak for their kind: **Attack** can open a fight, **Burst**, **Defend**, **Interrupt** and **Heal** may also speak mid-fight now and then. Harmful spells, heals and interrupts are sorted automatically; change any spell's kind, or make it **Silent**, on the Abilities tab or with `/mono map`. No class, form or spec is left quiet.
+- **Every Nth cast.** A spell you use a lot can speak only on every 2nd, 3rd, 5th or 10th cast.
+- **Your own lines for any spell or moment.** Pick a spell, an everyday moment or a kind of move on the Abilities tab and add lines. They join Monologue's own and travel with **Export**.
+- **Bear and cat lines.** Maul, Growl, Demoralizing Roar, Bash, Feral Charge, Faerie Fire (Feral), Pounce and Ravage now have lines, so druids talk in bear form too.
+- **More everyday moments.** Flight masters, trainers, merchants, mailboxes, quest hand-ins, profession windows, mining, herbalism, skinning, fishing, full bags, running out of air, a long fall, and your pet being summoned or falling (with lines for each warlock demon).
+- **Answer NPCs who yell.** Now and then your character answers a creature yelling close by. Never in a boss fight.
+- **Party banter.** When you say a line aloud in a group, another Monologue user may answer you a moment later. Only one answers each time.
+- **Mood today.** Grim, Weary, Cheerful or Fierce (My Voice tab, `/mono mood`) colours some of your lines and how often you speak.
+- **The waiting line, on screen.** A small bubble shows a line waiting for your next key press; click it to say it, right-click to skip.
+- **Lines from your own macros.** `/mono say interrupt 30` after `/cast Kick` says something now and then.
+- **Send as typed.** Start a message with `!!` to skip the accent.
+- **Typo fixes** (General tab, off by default): common typos and one-letter slips ("wepaon" → "weapon", "ironforg" → "Ironforge"). Try it with `/mono test <text>`.
+- **Quiet in dungeons** (Abilities tab): automatic lines a quarter as often in dungeons, none in raids.
 
 ## What's new in 0.1.3
 
@@ -81,7 +99,7 @@ If a group or guild member runs a newer version, Monologue tells you once in cha
 
 ## The /mono window
 
-`/mono` opens a window with three tabs (**General**, **Voice Lines**, **My Voice**) and a **Report Bug** button in the header.
+`/mono` opens a window with four tabs (**General**, **Voice Lines**, **My Voice**, **Abilities**) and a **Report Bug** button in the header.
 
 ### General tab
 
@@ -98,6 +116,9 @@ If a group or guild member runs a newer version, Monologue tells you once in cha
 | **Translate in** | Pick which chat channels get your accent: **Say, Yell, Party, Raid, Instance, Guild, Officer, Whisper**. Covers both what you type and Monologue's own lines. Default: Say, Yell and Party. Numbered channels (trade, general, LFG) are never translated. |
 | **Preview above the chat box** | While you type, a line just above the chat box shows how your message will come out. What you see is exactly what is sent. On by default. |
 | **Speech effects** | Your words slur when you're drunk (more the drunker you are: "Thish ish my lasht pint") and shake when you're badly hurt in a fight ("W-we need to fall back..."). On by default. |
+| **Fix common typos** | Fixes words with one clear spelling in your typed chat ("teh" → "the", "dont" → "don't", "i" → "I"), and one-letter slips when only one real word fits ("wepaon" → "weapon", "ironforg" → "Ironforge"). Names, links, SHOUTING and Words Never Translated are left alone. Off by default. Try it with `/mono test <text>`. |
+
+**Send as typed:** start a message with `!!` to send it exactly as you wrote it, with no accent (the `!!` is dropped).
 | **Rivals & Friends** | Opens the roster window (see below). |
 
 ### Voice Lines tab
@@ -114,7 +135,10 @@ Where and how often your character speaks in `/s`.
 | **React to the world** | How often a pull line reacts to the moment instead (an undead target, a rare, low mana, the mob that killed you…). Your spell's own lines still lead on most pulls. |
 | **Battle Cry button / Greet button** | Optional on-screen buttons. **Battle Cry** shouts a line. **Greet** says hello to your target, and glows when a greeting or reply is waiting to be said. Right-drag to move them. Keybinds: *Key Bindings → AddOns → Monologue*. |
 | **Reply when players emote at me** | Answers `/wave`, `/bow`, `/cheer`, `/hug` and the like. |
-| **Everyday moments** | Now and then a short line when you sit down to eat or drink, mount up, walk into an inn or city, or see a party member fall. |
+| **Everyday moments** | Now and then a short line when you sit down to eat or drink, mount up, walk into an inn or city, talk to a flight master, trainer or merchant, open a mailbox or your profession window, hand in a quest, mine, pick herbs, skin or fish, run out of bag space or air, take a long fall, summon your pet or lose it, or see a party member fall. |
+| **Show the waiting line** | When a line is waiting for your next key press, a small bubble shows it. Left-click (or your Greet key) says it, right-click skips it, right-drag moves the bubble. |
+| **Answer NPCs who yell** | Now and then your character answers a creature or NPC yelling close by ("Big words, Hogger. Come say them closer."). Never in a boss fight. |
+| **Party banter** | When you say a line aloud in a group, another party member who runs Monologue may answer you a moment later, and you them. Only one answers each time. |
 | **Right Now** | Live status: is speech on here, when the next line is possible, pull progress, and what your lines could react to. |
 
 The engine also keeps a fixed **45-second "breath"** between any two automatic lines, and never sends more than one automatic `/s`, `/y` or `/e` line every 6 seconds. In a fight it says **at most 2 lines**, each move speaks **once per fight**, and the same mob or player won't get a second pull line for 10 minutes.
@@ -144,6 +168,9 @@ Everything here is saved **per character** and sits on top of your race and clas
   - Your hometown works the same way as `{hometown}`.
 - **Dialect Strength:** **Full Dialect** (your General-tab accent), **Light Flavor** (key word swaps and the odd oath, no respelling), **Clean** (plain spelling; your clan, allegiance and traits still shape *what* you say).
 
+**Mood today**
+Grim, Weary, Cheerful or Fierce (or Normal). A share of your greetings, idle chatter, kill lines and low-health lines take on the mood, and Weary or Grim characters speak a little less, Cheerful ones a little more. Same as `/mono mood`.
+
 **Cross-Race Stances**
 Pick a race and a stance (warm, admiring, playful, wary, gruff, disdainful) to set how you greet friendly players of that race.
 
@@ -157,6 +184,28 @@ Pick a race and a stance (warm, admiring, playful, wary, gruff, disdainful) to s
 
 **Export / Import**
 **Export** copies your whole voice as a `MONO1:` string; press Ctrl+C and send it to a friend. They paste it and press **Import**. Anything that doesn't fit their character (a clan from another race, say) is skipped with a note.
+
+### Abilities tab
+
+Saved **per character** (the two checkboxes are for all characters).
+
+**What Kind of Move**
+Every spell you cast shows up here. Spells with their own lines (Charge, Rake, Maul...) keep them. Any other spell speaks from a shared pool for its kind, so no class, form or spec is ever silent:
+
+| Kind | When it speaks |
+|---|---|
+| **Attack** | Can open a fight, like a signature move. Harmful spells get this automatically. |
+| **Burst** | A big cooldown: can open a fight and may also speak mid-fight. Your choice only. |
+| **Defend · Interrupt · Heal** | May also speak mid-fight now and then. Interrupts and heals are spotted automatically. |
+| **Silent** | Never speaks, even a spell that has its own lines. |
+
+Next to each spell, **Every cast / 2nd / 3rd / 5th / 10th** lets a spell you use a lot speak only on every Nth cast. Untick **Spells without their own lines speak for their kind** to go back to signature moves only. The fight limits still apply: two lines a fight, each move once. `/mono map <spell> <kind>` does the same from chat.
+
+**Pacing**
+**Quiet in dungeons**: automatic lines a quarter as often in dungeons, and none in raids.
+
+**My Lines for a Spell or Moment**
+Pick a spell you've cast, an everyday moment (Mining, Merchant, Pet Summon...) or a kind of move, and add your own lines. They join the lines Monologue already has; a spell with none gets yours alone. Tokens like `{target}` and `{zone}` work, and **Export** on My Voice includes them.
 
 ### Rivals & Friends (roster)
 
@@ -180,7 +229,7 @@ All commands start with `/mono` (`/mono help` lists them in game).
 | Command | What it does |
 |---|---|
 | `/mono` | Open the settings window |
-| `/mono lines` · `/mono voice` | Open the Voice Lines or My Voice tab |
+| `/mono lines` · `/mono voice` · `/mono abilities` | Open the Voice Lines, My Voice or Abilities tab |
 | `/mono roster` | Open Rivals & Friends |
 | `/mono toggle` | Turn Monologue on or off |
 | `/mono safemode` | Strict Safe-Mode on/off |
@@ -188,11 +237,24 @@ All commands start with `/mono` (`/mono help` lists them in game).
 | `/mono greet` | Greet your friendly target (or say a waiting line) |
 | `/mono ic` · `/mono ooc` | In character, or out of character (no translation, no automatic lines; the minimap book goes grey). Also a keybind: *Key Bindings → AddOns → Monologue* |
 | `/mono keep <word>` · `/mono unkeep <word>` | Add or remove a word that is never translated (`/mono keep` lists them) |
+| `/mono mood <grim\|weary\|cheerful\|fierce\|off>` | How your character feels today |
+| `/mono map <spell> <attack\|burst\|defend\|interrupt\|heal\|none\|auto>` | What kind of move a spell is (`/mono map` lists your choices) |
+| `/mono test <text>` | Show what a message would turn into (accent and typo fixes), without sending it |
+| `/mono say <kind> [chance %]` | A line on demand, for your own macros. Kinds: `idle`, `kill`, `pull`, `hurt`, `interrupt`, `heal`, `defend`, `greet`, `cry`. See the example below. |
 | `/mono friend [note]` · `/mono unfriend [name]` · `/mono friends` | Mark, unmark, list friends |
 | `/mono rivals` · `/mono duels` | List your rivals or duel records |
 | `/mono pin <name>` · `/mono unpin <name>` | Protect a rival from being cleared |
 | `/mono button` · `/mono minimap [reset]` | Show/hide the Battle Cry button or minimap button |
 | `/mono welcome` · `/mono version` | Show the welcome card or your version |
+
+**Macros:** a `/mono` command in a macro counts as a key press, so the line is said aloud. For example, to say something now and then when you interrupt:
+
+```
+/cast Kick
+/mono say interrupt 30
+```
+
+`30` means a 30% chance. Cooldowns, the 45-second breath and the 2-lines-per-fight limit still apply, so it never spams.
 
 **Tuning**
 
