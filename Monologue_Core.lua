@@ -293,7 +293,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.4"
+Engine.VERSION = "0.1.4.1"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -2538,6 +2538,18 @@ function Engine:BuildBugReport(note)
     add(string.format("Settings: enabled=%s chattiness=%s background=%s accent=%s pullEvery=%s situations=%s%% breath=%ss debug=%s strictSafeMode=%s",
         str(db.enabled), str(db.chattiness), str(db.backgroundSpeech), str(db.translationIntensity),
         str(db.pullEvery), str(db.situationChance), str(db.globalBreath), str(db.debugMode), str(db.strictSafeMode)))
+    -- Switches and choices added in 0.1.4 (Voice Lines, General, My Voice and Abilities tabs)
+    local function Count(t)
+        local n = 0
+        for _ in pairs(type(t) == "table" and t or {}) do n = n + 1 end
+        return n
+    end
+    local char = MonologueCharDB or {}
+    add(string.format("More: moments=%s bubble=%s npcYells=%s banter=%s typos=%s abilityAuto=%s dungeonQuiet=%s ooc=%s mood=%s | spells seen %d, kinds chosen %d, every-Nth %d, own-line pools %d",
+        str(db.momentLines ~= false), str(db.queueBubble ~= false), str(db.npcYells ~= false), str(db.partyBanter ~= false),
+        str(db.fixTypos == true), str(db.abilityAuto ~= false), str(db.dungeonQuiet == true), str(db.outOfCharacter == true),
+        str(self:GetMood() or "normal"), Count(char.SeenSpells), Count(char.AbilityMap), Count(char.AbilityEvery),
+        Count(cv.extraLines)))
     local press = db.pressVoice or {}
     local places, blocked = {}, {}
     for _, place in ipairs({ "world", "worldpvp", "dungeon", "raid", "battleground", "boss" }) do
@@ -2574,19 +2586,22 @@ if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
     pcall(C_ChatInfo.RegisterAddonMessagePrefix, VERSION_PREFIX)
 end
 
--- "0.1.0-alpha" -> { 0, 1, 0, 1 }; release rank: alpha 1, beta 2, rc 3, none 4
+-- "0.1.0-alpha" -> { 0, 1, 0, 0, 1 }, "0.1.4.1" -> { 0, 1, 4, 1, 4 }: an optional fourth
+-- number for small follow-up releases; release rank: alpha 1, beta 2, rc 3, none 4
 local PRERELEASE_RANK = { alpha = 1, beta = 2, rc = 3 }
 local function VersionKey(version)
     if type(version) ~= "string" then return nil end
-    local major, minor, patch, pre = version:match("^(%d+)%.(%d+)%.(%d+)%-?(%a*)")
+    local major, minor, patch, rest = version:match("^(%d+)%.(%d+)%.(%d+)(.*)$")
     if not major then return nil end
-    return { tonumber(major), tonumber(minor), tonumber(patch), PRERELEASE_RANK[pre:lower()] or 4 }
+    local hotfix = rest:match("^%.(%d+)") or "0"
+    local pre = rest:match("^[%.%d]*%-?(%a*)") or ""
+    return { tonumber(major), tonumber(minor), tonumber(patch), tonumber(hotfix), PRERELEASE_RANK[pre:lower()] or 4 }
 end
 
 local function IsNewerVersion(theirs, mine)
     local a, b = VersionKey(theirs), VersionKey(mine)
     if not a or not b then return false end
-    for i = 1, 4 do
+    for i = 1, 5 do
         if a[i] ~= b[i] then return a[i] > b[i] end
     end
     return false

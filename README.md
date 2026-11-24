@@ -9,6 +9,7 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 ---
 
 ## Contents
+- [What's new in 0.1.4.1](#whats-new-in-0141)
 - [What's new in 0.1.4](#whats-new-in-014)
 - [What's new in 0.1.3](#whats-new-in-013)
 - [Install](#install)
@@ -24,6 +25,11 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 - [FAQ & troubleshooting](#faq--troubleshooting)
 
 ---
+
+## What's new in 0.1.4.1
+
+- **Druid lines rewritten.** Moonfire, Wrath, Starfire, Rake, Entangling Roots, Faerie Fire, the combat openers and the big-cooldown, routine and low-health reactions are calmer and more specific, with fewer shouted lines.
+- **More variety for druids.** Moonfire, Wrath, Rake and Maul now have their own lines for enemy players, elites, rares and groups; Feral Charge, Entangling Roots and Bash have their own lines for enemy players.
 
 ## What's new in 0.1.4
 

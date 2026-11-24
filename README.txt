@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.4 (alpha)
+MONOLOGUE  -  version 0.1.4.1 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
@@ -28,6 +28,13 @@ UPDATING
 3. Download the newest Monologue_v.1.zip:
        https://github.com/GandalfTheGrey-k/Monologue/releases/latest
 4. Extract it into AddOns as in INSTALLING, start the game, and type /mono version.
+
+
+NEW IN 0.1.4.1
+--------------
+- Druid lines rewritten: calmer, more specific, fewer shouted lines.
+- Druids get their own lines against enemy players, elites, rares and in groups
+  (Moonfire, Wrath, Rake, Maul; Feral Charge, Entangling Roots and Bash against players).
 
 
 NEW IN 0.1.4

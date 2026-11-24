@@ -64,6 +64,7 @@ same race with different temperaments are easy to tell apart.
 | Signature spell, Default | 10 |
 | Signature spell, each persona | 6 |
 | Friend / guild greetings, duel win / loss | 8 |
+| Signature spell context (`.Player`, `.Elite`, `.Rare`, `.Party`) | 4 (aim for 6) |
 | Each PvP tier, rival tier, emote reply kind, stance | 4 |
 
 ## Before you commit lines
