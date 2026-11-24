@@ -416,6 +416,26 @@ function UI:CreatePanel()
     end)
     controls.typos:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- Send key (MonologueDB.translateKey, also /mono sendkey)
+    local sendKeyLabel = CreateLabel(f, "Translate on:")
+    sendKeyLabel:SetPoint("TOPLEFT", LEFT + 212, -637)
+    controls.sendKey = CreateDropdown(f, 150, {
+            { value = "ENTER", text = "Enter" },
+            { value = "SHIFT", text = "Shift+Enter only" },
+            { value = "CTRL", text = "Ctrl+Enter only" },
+        },
+        function() return MonologueDB.translateKey or "ENTER" end,
+        function(value) MonologueDB.translateKey = value end)
+    controls.sendKey:SetPoint("LEFT", sendKeyLabel, "RIGHT", 8, 0)
+    controls.sendKey:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Translate on", 1, 0.82, 0)
+        GameTooltip:AddLine("Enter: everything you type in a Translate-in channel gets your accent.", 1, 1, 1, true)
+        GameTooltip:AddLine("Shift+Enter or Ctrl+Enter only: plain Enter sends your message exactly as typed; hold Shift or Ctrl as you press Enter to send it translated. Same as /mono sendkey.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    controls.sendKey:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     -----------------------------------------------------------------------
     -- Footer: active profile status + close
     -----------------------------------------------------------------------
@@ -460,6 +480,7 @@ function UI:Refresh()
     controls.preview:Refresh()
     controls.effects:Refresh()
     controls.typos:Refresh()
+    controls.sendKey:Refresh()
     for _, cb in ipairs(controls.channels) do cb:Refresh() end
 
     local context = MonologueEngine.ActiveContext or {}
@@ -811,6 +832,9 @@ function UI:CreateLinesPanel()
     l.greet = Box(nil, "Greet button", LEFT + 216, -466, function(self)
         UI:SetGreetButtonShown(self:GetChecked())
     end)
+    l.taunt = Box(nil, "Taunt button", LEFT + 376, -466, function(self)
+        UI:SetTauntButtonShown(self:GetChecked())
+    end)
     l.emotes = Box(nil, "Reply when players emote at me (/wave, /bow, /cheer...)", LEFT - 4, -490, function(self)
         MonologueDB.emoteReplies = self:GetChecked() and true or false
     end)
@@ -837,9 +861,9 @@ function UI:CreateLinesPanel()
     l.banter = Box(nil, "Party banter (other Monologue users answer you, and you them)", LEFT - 4, -562, function(self)
         MonologueDB.partyBanter = self:GetChecked() and true or false
     end)
-    Hint("Battle Cry shouts a line. Greet says hello to your target, and glows when a line is waiting; the "
-        .. "waiting line also shows in a bubble you can click. Right-drag to move. Keybinds (also in/out of "
-        .. "character): Key Bindings > AddOns > Monologue. Macros: /mono say interrupt 30.", -590)
+    Hint("Battle Cry shouts, Greet says hello (it glows when a line is waiting), Taunt jeers at an enemy "
+        .. "player. Right-drag to move. Rather not have buttons? Key Bindings > AddOns > Monologue, or "
+        .. "/mono cry, /mono greet, /mono taunt in a macro.", -590)
 
     -- Live status
     CreateSectionHeader(f, "Right Now", -622)
@@ -874,6 +898,7 @@ function UI:RefreshLines(skipSliders)
     end
     l.cry:SetChecked(MonologueDB.buttonShown and true or false)
     l.greet:SetChecked(MonologueDB.greetButtonShown and true or false)
+    l.taunt:SetChecked(MonologueDB.tauntButtonShown and true or false)
     l.emotes:SetChecked(MonologueDB.emoteReplies and true or false)
     l.moments:SetChecked(MonologueDB.momentLines ~= false)
     l.bubble:SetChecked(MonologueDB.queueBubble ~= false)
@@ -960,7 +985,7 @@ local function VoicePersonaOptions()
     return options
 end
 
-local RACE_LABELS = { NightElf = "Night Elf" }
+local RACE_LABELS = { NightElf = "Night Elf", Scourge = "Undead" }
 local function RaceLabel(key) return RACE_LABELS[key] or key end
 
 local STANCE_OPTIONS = {
@@ -1252,6 +1277,28 @@ function UI:CreateVoicePanel()
         MonologueEngine:CustomVoiceSetStance(v.stanceRace, v.stanceValue)
     end)
 
+    -- Enemy Faction: taunts and race nicknames (stored on the custom voice, per character)
+    v.hEnemy = Header("Enemy Faction")
+    v.enemyHint = Note("|cff888888How you talk about the other faction. Taunts are said when you target an enemy player you have no grudge with yet, and now and then as you open a fight. The other faction sees /say as gibberish; your own side hears every word.|r")
+    v.tauntLabel = CreateLabel(content, "Taunts:")
+    v.tauntDD = CreateDropdown(content, 230, {
+            { value = "OFF", text = "Off" },
+            { value = "CIVIL", text = "Civil (an honest rivalry)" },
+            { value = "ROUGH", text = "Rough (trash talk)" },
+            { value = "SAVAGE", text = "Savage (race nicknames)" },
+        },
+        function() return CurrentCV().taunts or "OFF" end,
+        function(value) SetIdentity("taunts", value) end)
+    v.nickLabel = CreateLabel(content, "Race nicknames:")
+    v.nickDD = CreateDropdown(content, 230, {
+            { value = "OFF", text = "Off" },
+            { value = "ENEMY", text = "The other faction's races" },
+            { value = "ALL", text = "Every race" },
+        },
+        function() return CurrentCV().nicknames or "OFF" end,
+        function(value) SetIdentity("nicknames", value) end)
+    v.nickNote = Note("")
+
     -- Oaths
     v.hLines = Header("My Oaths")
     v.lineHint = Note("|cff888888Short exclamations said now and then before a greeting, a kill line, a low-health line or a battle cry. Added to your race's own. Example: By my blade!|r")
@@ -1361,7 +1408,8 @@ function UI:LayoutVoice()
     -- Keep dropdown labels in step with the saved data (after import, reset, slash commands)
     if v.stanceRace then v.stanceValue = cv.raceStances[v.stanceRace] or "DEFAULT" end
     for _, dropdown in ipairs({ v.persona, v.temper, v.stanceRaceDD, v.stanceDD,
-        v.clanDD, v.homeDD, v.allegianceDD, v.professionDD, v.upbringingDD, v.traitDD, v.trait2DD, v.strengthDD }) do
+        v.clanDD, v.homeDD, v.allegianceDD, v.professionDD, v.upbringingDD, v.traitDD, v.trait2DD, v.strengthDD,
+        v.tauntDD, v.nickDD }) do
         dropdown:GenerateMenu()
     end
 
@@ -1495,6 +1543,20 @@ function UI:LayoutVoice()
         }
     end
     listRows(stanceEntries)
+
+    -- Enemy Faction
+    at(v.hEnemy, 0); y = y + 22
+    noteAt(v.enemyHint)
+    at(v.tauntLabel, 4, 5); at(v.tauntDD, 130, 0); y = y + 30
+    at(v.nickLabel, 4, 5); at(v.nickDD, 130, 0); y = y + 30
+    local nickParts = {}
+    local nicknames = engine.Data.Taunts and engine.Data.Taunts.Nicknames or {}
+    for _, race in ipairs(SortedKeys(nicknames)) do
+        nickParts[#nickParts + 1] = RaceLabel(race) .. ": " .. nicknames[race].many
+    end
+    v.nickNote:SetText("|cff888888Swaps race names in what you type and say (orcs -> green skins), and Savage taunts use them. "
+        .. table.concat(nickParts, ", ") .. ". Try it: /mono test the orcs are coming|r")
+    noteAt(v.nickNote)
 
     -- Oaths
     at(v.hLines, 0); y = y + 22
@@ -1995,6 +2057,61 @@ function UI:CreateGreetButton()
 
     button:SetShown(MonologueDB.greetButtonShown == true)
     self.GreetButton = button
+end
+
+local TAUNT_BUTTON_DEFAULT_Y = -244
+
+-- Taunt: taunts your enemy player target (Civil when taunts are Off). Opt-in
+-- (MonologueDB.tauntButtonShown).
+function UI:CreateTauntButton()
+    if self.TauntButton or not MonologueDB then return end
+
+    local button = CreateFrame("Button", "MonologueTauntButton", UIParent, "UIPanelButtonTemplate")
+    button:SetSize(CRY_BUTTON_WIDTH, CRY_BUTTON_HEIGHT)
+    button:SetText("Taunt")
+    button:SetFrameStrata("MEDIUM")
+    button:SetClampedToScreen(true)
+    button:SetMovable(true)
+    button:RegisterForClicks("LeftButtonUp")
+    button:RegisterForDrag("RightButton")
+
+    local pos = MonologueDB.tauntButtonPos
+    if type(pos) == "table" and type(pos.point) == "string" and type(pos.relPoint) == "string"
+        and type(pos.x) == "number" and type(pos.y) == "number" then
+        button:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
+    else
+        button:SetPoint("CENTER", UIParent, "CENTER", 0, TAUNT_BUTTON_DEFAULT_Y)
+    end
+
+    button:SetScript("OnClick", function() MonologueEngine:TauntNow() end)
+    button:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    button:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, relPoint, x, y = self:GetPoint(1)
+        if point then MonologueDB.tauntButtonPos = { point = point, relPoint = relPoint, x = x, y = y } end
+    end)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Taunt", 1, 0.82, 0)
+        GameTooltip:AddLine("Left-click: taunt your enemy player target", 1, 1, 1, true)
+        local level = MonologueEngine:GetTauntLevel()
+        GameTooltip:AddLine("Level: " .. (level and (level:sub(1, 1) .. level:sub(2):lower()) or "Civil (taunts are Off)")
+            .. ". Change it on My Voice > Enemy Faction.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Right-drag: move", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    button:SetShown(MonologueDB.tauntButtonShown == true)
+    self.TauntButton = button
+end
+
+function UI:SetTauntButtonShown(show)
+    if not MonologueDB then return end
+    MonologueDB.tauntButtonShown = show and true or false
+    self:CreateTauntButton()
+    if self.TauntButton then self.TauntButton:SetShown(MonologueDB.tauntButtonShown) end
+    self:RefreshLines()
 end
 
 function UI:SetGreetButtonShown(show)
@@ -2831,6 +2948,7 @@ cryButtonFrame:SetScript("OnEvent", function(self)
     BuildSafely("minimap button", function() UI:CreateMinimapButton() end)
     BuildSafely("Battle Cry button", function() UI:CreateBattleCryButton() end)
     BuildSafely("Greet button", function() UI:CreateGreetButton() end)
+    BuildSafely("Taunt button", function() UI:CreateTauntButton() end)
     BuildSafely("queue bubble", function() UI:CreateQueueBubble() end)
     BuildSafely("portrait menu entries", function() UI:HookFriendMenus() end)
     self:UnregisterEvent("PLAYER_LOGIN")

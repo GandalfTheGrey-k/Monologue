@@ -5,6 +5,9 @@
     <Binding name="MONOLOGUE_BATTLECRY" category="ADDONS">
         if MonologueEngine and MonologueEngine.BattleCry then MonologueEngine:BattleCry() end
     </Binding>
+    <Binding name="MONOLOGUE_TAUNT" category="ADDONS">
+        if MonologueEngine and MonologueEngine.TauntNow then MonologueEngine:TauntNow() end
+    </Binding>
     <Binding name="MONOLOGUE_TOGGLE_IC" category="ADDONS">
         if MonologueEngine and MonologueEngine.ToggleInCharacter then MonologueEngine:ToggleInCharacter() end
     </Binding>

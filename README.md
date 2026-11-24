@@ -9,6 +9,7 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 ---
 
 ## Contents
+- [What's new in 0.1.4.5](#whats-new-in-0145)
 - [What's new in 0.1.4.1](#whats-new-in-0141)
 - [What's new in 0.1.4](#whats-new-in-014)
 - [What's new in 0.1.3](#whats-new-in-013)
@@ -25,6 +26,22 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 - [FAQ & troubleshooting](#faq--troubleshooting)
 
 ---
+
+## What's new in 0.1.4.5
+
+- **Taunts for the other faction.** Choose how mean your character is on *My Voice → Enemy Faction* (or `/mono taunts`): **Off** (default), **Civil** (an honest rivalry), **Rough** (trash talk) or **Savage** (race nicknames to their face). Taunts come up when you target an enemy player you have no grudge with yet, and now and then as you open a fight.
+- **Taunt button and keybind.** An optional **Taunt** button (Voice Lines tab) says a taunt at your enemy player target right away. Also a keybind (*Key Bindings → AddOns → Monologue*) and `/mono taunt` for macros.
+- **Race nicknames in your chat** (My Voice → Enemy Faction, or `/mono nicknames`): swaps race names for nicknames in what you type and say, for the other faction's races or every race. "The orcs are coming" becomes "The green skins are coming".
+
+  | Race | Nickname | Race | Nickname |
+  |---|---|---|---|
+  | Orc | green skin | Human | pinkskin |
+  | Troll | tusk sucker | Dwarf | stumpy |
+  | Tauren | grass muncher | Gnome | ankle biter |
+  | Undead | bone back | Night Elf | pointy |
+  | Skyborne | feather duster | | |
+
+- **Translate on Shift+Enter or Ctrl+Enter** (General tab, or `/mono sendkey`): plain Enter sends your message exactly as typed, and holding Shift or Ctrl as you press Enter sends it in your accent. The preview shows which key to press.
 
 ## What's new in 0.1.4.1
 
@@ -124,6 +141,8 @@ If a group or guild member runs a newer version, Monologue tells you once in cha
 | **Speech effects** | Your words slur when you're drunk (more the drunker you are: "Thish ish my lasht pint") and shake when you're badly hurt in a fight ("W-we need to fall back..."). On by default. |
 | **Fix common typos** | Fixes words with one clear spelling in your typed chat ("teh" → "the", "dont" → "don't", "i" → "I"), and one-letter slips when only one real word fits ("wepaon" → "weapon", "ironforg" → "Ironforge"). Names, links, SHOUTING and Words Never Translated are left alone. Off by default. Try it with `/mono test <text>`. |
 
+| **Translate on** | **Enter** (default): everything you type in a Translate-in channel gets your accent. **Shift+Enter only** or **Ctrl+Enter only**: plain Enter sends your message exactly as typed; hold Shift or Ctrl as you press Enter to send it translated. Same as `/mono sendkey`. |
+
 **Send as typed:** start a message with `!!` to send it exactly as you wrote it, with no accent (the `!!` is dropped).
 | **Rivals & Friends** | Opens the roster window (see below). |
 
@@ -139,7 +158,7 @@ Where and how often your character speaks in `/s`.
 | **Wait at least this long between lines… (30 sec – 10 min)** | Minimum spacing between ability-press lines. |
 | **Chance of other reactions** | Scales how often greetings, duel lines, PvP lines and other reactions fire (off → double). |
 | **React to the world** | How often a pull line reacts to the moment instead (an undead target, a rare, low mana, the mob that killed you…). Your spell's own lines still lead on most pulls. |
-| **Battle Cry button / Greet button** | Optional on-screen buttons. **Battle Cry** shouts a line. **Greet** says hello to your target, and glows when a greeting or reply is waiting to be said. Right-drag to move them. Keybinds: *Key Bindings → AddOns → Monologue*. |
+| **Battle Cry / Greet / Taunt buttons** | Optional on-screen buttons. **Battle Cry** shouts a line. **Greet** says hello to your target, and glows when a greeting or reply is waiting to be said. **Taunt** jeers at your enemy player target, at your Enemy Faction level (Civil when taunts are Off). Right-drag to move them. Rather not have buttons? Each one is also a keybind (*Key Bindings → AddOns → Monologue*) and a slash command for macros: `/mono cry`, `/mono greet`, `/mono taunt`. |
 | **Reply when players emote at me** | Answers `/wave`, `/bow`, `/cheer`, `/hug` and the like. |
 | **Everyday moments** | Now and then a short line when you sit down to eat or drink, mount up, walk into an inn or city, talk to a flight master, trainer or merchant, open a mailbox or your profession window, hand in a quest, mine, pick herbs, skin or fish, run out of bag space or air, take a long fall, summon your pet or lose it, or see a party member fall. |
 | **Show the waiting line** | When a line is waiting for your next key press, a small bubble shows it. Left-click (or your Greet key) says it, right-click skips it, right-drag moves the bubble. |
@@ -179,6 +198,10 @@ Grim, Weary, Cheerful or Fierce (or Normal). A share of your greetings, idle cha
 
 **Cross-Race Stances**
 Pick a race and a stance (warm, admiring, playful, wary, gruff, disdainful) to set how you greet friendly players of that race.
+
+**Enemy Faction**
+- **Taunts:** Off (default), Civil, Rough or Savage. Said when you target an enemy player you have no grudge with yet, and now and then as you open a fight. Savage uses the race nicknames. The other faction sees /say as gibberish; your own side hears every word. Same as `/mono taunts`.
+- **Race nicknames:** Off, the other faction's races, or every race. Swaps race names in what you type and say (orcs → green skins, night elves → pointies). Same as `/mono nicknames`.
 
 **Your own lines**
 - **My Oaths:** short exclamations like "By my blade!", added to your race's own. Now and then one is said before a greeting, a kill line, a low-health line or a battle cry ("By Magni's beard! Another one down."). Never on chat you type.
@@ -241,6 +264,10 @@ All commands start with `/mono` (`/mono help` lists them in game).
 | `/mono safemode` | Strict Safe-Mode on/off |
 | `/mono cry [yell\|say]` | Shout a battle cry now |
 | `/mono greet` | Greet your friendly target (or say a waiting line) |
+| `/mono taunt` | Taunt your enemy player target now |
+| `/mono taunts <off\|civil\|rough\|savage>` | How mean you are to the other faction |
+| `/mono nicknames <off\|enemy\|all>` | Race nicknames in your chat (orcs → green skins) |
+| `/mono sendkey <enter\|shift\|ctrl>` | Translate typed chat on Enter, or only on Shift+Enter / Ctrl+Enter |
 | `/mono ic` · `/mono ooc` | In character, or out of character (no translation, no automatic lines; the minimap book goes grey). Also a keybind: *Key Bindings → AddOns → Monologue* |
 | `/mono keep <word>` · `/mono unkeep <word>` | Add or remove a word that is never translated (`/mono keep` lists them) |
 | `/mono mood <grim\|weary\|cheerful\|fierce\|off>` | How your character feels today |

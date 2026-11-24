@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.4.1 (alpha)
+MONOLOGUE  -  version 0.1.4.5 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
@@ -28,6 +28,19 @@ UPDATING
 3. Download the newest Monologue_v.1.zip:
        https://github.com/GandalfTheGrey-k/Monologue/releases/latest
 4. Extract it into AddOns as in INSTALLING, start the game, and type /mono version.
+
+
+NEW IN 0.1.4.5
+--------------
+- Taunts for the other faction (My Voice > Enemy Faction, /mono taunts): Off (default),
+  Civil, Rough or Savage (race nicknames to their face).
+- Taunt button (Voice Lines tab), keybind and /mono taunt: taunt your enemy target now.
+- Race nicknames in your chat (/mono nicknames): orcs -> green skins, trolls -> tusk
+  suckers, tauren -> grass munchers, undead -> bone backs, night elves -> pointies,
+  humans -> pinkskins, dwarves -> stumpies, gnomes -> ankle biters, Skyborne -> feather
+  dusters.
+- Translate only on Shift+Enter or Ctrl+Enter if you like (General tab, /mono sendkey);
+  plain Enter then sends your message as typed.
 
 
 NEW IN 0.1.4.1
@@ -75,13 +88,13 @@ QUICK START
 - Just play. Every few pulls, a signature move says a line in /s. Ordinary attacks (Heroic
   Strike, Fireball spam...) stay quiet.
 - /mono opens the settings. It has four tabs:
-    General      accent strength, chat preview, speech effects, typo fixes, Strict Safe-Mode,
+    General      accent strength, chat preview, send key, speech effects, typo fixes, Strict Safe-Mode,
                  debug
-    Voice Lines  where and how often you speak (sliders), the Battle Cry and Greet buttons,
+    Voice Lines  where and how often you speak (sliders), the Battle Cry, Greet and Taunt buttons,
                  everyday moments, the waiting-line bubble, NPC yells, party banter
     My Voice     your character: personality, clan, hometown, allegiance, upbringing,
-                 traits, oath / nemesis / catchphrase, mood, My Oaths, words never
-                 translated, your own lines and word swaps
+                 traits, oath / nemesis / catchphrase, mood, taunts and race nicknames,
+                 My Oaths, words never translated, your own lines and word swaps
     Abilities    what kind of move each spell is (Attack, Burst, Defend, Interrupt, Heal,
                  Silent; every Nth cast), quiet in dungeons, and your own lines for any
                  spell or everyday moment
@@ -104,6 +117,10 @@ SLASH COMMANDS
   /mono situations   what your lines could react to right now (target, mana, night...)
   /mono party        party members who also run Monologue
   /mono greet        greet your target (or say a waiting line)
+  /mono taunt        taunt your enemy player target
+  /mono taunts <off|civil|rough|savage>   how mean you are to the other faction
+  /mono nicknames <off|enemy|all>   race nicknames in your chat
+  /mono sendkey <enter|shift|ctrl>  translate on Enter, or only on Shift/Ctrl+Enter
   /mono ic | ooc     in character / out of character (also a keybind)
   /mono keep <word>  a word that is never translated (/mono unkeep removes it)
   /mono mood <grim|weary|cheerful|fierce|off>   how your character feels today
@@ -113,6 +130,7 @@ SLASH COMMANDS
                      interrupt, heal, none, auto); /mono map lists your choices
   /mono test <text>  show what a message would turn into, without sending it
   /mono cry          battle cry
+  No buttons? Greet, Battle Cry and Taunt are also keybinds: Key Bindings > AddOns > Monologue.
   /mono debug        show [Monologue Debug] lines in chat
   /mono version      your version
 

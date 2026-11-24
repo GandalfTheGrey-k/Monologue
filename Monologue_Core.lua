@@ -88,6 +88,7 @@ BINDING_HEADER_MONOLOGUE = "Monologue"
 BINDING_NAME_MONOLOGUE_GREET = "Greet target (or say the waiting greeting)"
 BINDING_NAME_MONOLOGUE_TOGGLE_IC = "Toggle in character / out of character"
 BINDING_NAME_MONOLOGUE_BATTLECRY = "Battle cry"
+BINDING_NAME_MONOLOGUE_TAUNT = "Taunt your enemy player target"
 
 local frame = CreateFrame("Frame", "MonologueCoreFrame")
 Engine.Frame = frame
@@ -244,6 +245,8 @@ local DEFAULT_CONFIG = {
     fixTypos = false,          -- Fix common typos in typed chat ("teh" -> "the") (General tab)
     abilityAuto = true,        -- Spells without their own lines speak from a shared pool for their kind (Abilities tab)
     dungeonQuiet = false,      -- Automatic lines a quarter as often in dungeons, none in raids (Abilities tab)
+    tauntButtonShown = false,  -- Taunt HUD button: opt-in (Voice Lines tab)
+    translateKey = "ENTER",    -- Typed chat is translated on: "ENTER" (always), "SHIFT" or "CTRL" + Enter only (General tab)
     -- keepWords = { "word", ... } is written by the Words Never Translated list (My Voice tab, /mono keep)
     -- buttonPos = { point, relPoint, x, y } is written when the button is moved
 }
@@ -293,7 +296,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.4.1"
+Engine.VERSION = "0.1.4.5"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -628,6 +631,7 @@ function Engine:InitializeDB()
     MonologueDB.castSendBlocked = nil   -- retired: cast events never send any more
     MonologueDB.keypressBlocked = nil   -- retired (the jump route was removed)
     MonologueDB.greetButtonShown = MonologueDB.greetButtonShown == true
+    MonologueDB.tauntButtonShown = MonologueDB.tauntButtonShown == true
     MonologueDB.emoteReplies = MonologueDB.emoteReplies ~= false
     -- Ability-press voice: where /s lines may be said (menu: My Voice tab)
     if type(MonologueDB.pressVoice) ~= "table" then MonologueDB.pressVoice = {} end
@@ -1041,7 +1045,13 @@ end
 -- Azeroth Identity fields (My Voice tab): clan key, custom clan name, hometown, allegiance key,
 -- profession key (nil = auto-detect)
 local CV_IDENTITY_FIELDS = { "clan", "clanName", "hometown", "allegiance", "profession",
-    "upbringing", "trait", "trait2", "dialectStrength", "oath", "nemesis", "catchphrase" }
+    "upbringing", "trait", "trait2", "dialectStrength", "oath", "nemesis", "catchphrase", "taunts", "nicknames" }
+-- Enemy Faction (My Voice): how mean taunts are (nil = Off), and race nicknames in your chat
+-- (nil = Off; ENEMY = the other faction's races, ALL = every race). Lines: situations/Taunts.lua
+Tune.TAUNT_LEVELS = { CIVIL = "Civil", ROUGH = "Rough", SAVAGE = "Savage" }
+Tune.NICKNAME_MODES = { ENEMY = true, ALL = true }
+Tune.TAUNT_SHARE = 0.5     -- a target-change line at an enemy player that is a taunt, when one fits
+Tune.TAUNT_BUTTON_GAP = 6  -- seconds between taunts from the button, keybind or /mono taunt
 -- Character Anchors (free text): longer than names
 local CV_MAX_ANCHOR = 80
 local CV_ANCHOR_FIELDS = { oath = true, nemesis = true, catchphrase = true }
@@ -1137,6 +1147,8 @@ function Engine:GetCustomVoice()
     if cv.trait and not Engine.Data.Traits[cv.trait] then cv.trait = nil end
     if cv.trait2 and (not Engine.Data.Traits[cv.trait2] or cv.trait2 == cv.trait) then cv.trait2 = nil end
     if cv.dialectStrength and not CV_DIALECT_STRENGTHS[cv.dialectStrength] then cv.dialectStrength = nil end
+    if cv.taunts and not Tune.TAUNT_LEVELS[cv.taunts] then cv.taunts = nil end
+    if cv.nicknames and not Tune.NICKNAME_MODES[cv.nicknames] then cv.nicknames = nil end
     return cv
 end
 
@@ -1429,6 +1441,11 @@ function Engine:CustomVoiceSetIdentity(field, value)
         if value == "FULL" then value = nil end
         if value ~= nil and not CV_DIALECT_STRENGTHS[value] then return false, "Unknown dialect strength." end
         cv.dialectStrength = value
+    elseif field == "taunts" or field == "nicknames" then
+        if value == "OFF" then value = nil end
+        local known = field == "taunts" and Tune.TAUNT_LEVELS or Tune.NICKNAME_MODES
+        if value ~= nil and not known[value] then return false, "Unknown choice." end
+        cv[field] = value
     else
         return false, "bad field"
     end
@@ -1488,14 +1505,16 @@ function Engine:ExportCustomVoice()
     -- x trait, d dialect strength
     for _, pair in ipairs({ { "l", "clan" }, { "n", "clanName" }, { "t", "hometown" }, { "a", "allegiance" },
         { "f", "profession" }, { "u", "upbringing" }, { "x", "trait" }, { "d", "dialectStrength" },
-        { "y", "trait2" }, { "k", "oath" }, { "m", "nemesis" }, { "q", "catchphrase" } }) do
+        { "y", "trait2" }, { "k", "oath" }, { "m", "nemesis" }, { "q", "catchphrase" },
+        { "j", "taunts" }, { "z", "nicknames" } }) do
         if cv[pair[2]] then records[#records + 1] = pair[1] .. ":" .. CVEncode(cv[pair[2]]) end
     end
     return CV_HEADER .. table.concat(records, ";")
 end
 
 local CV_IDENTITY_TAGS = { l = "clan", n = "clanName", t = "hometown", a = "allegiance", f = "profession",
-    u = "upbringing", x = "trait", d = "dialectStrength", y = "trait2", k = "oath", m = "nemesis", q = "catchphrase" }
+    u = "upbringing", x = "trait", d = "dialectStrength", y = "trait2", k = "oath", m = "nemesis", q = "catchphrase",
+    j = "taunts", z = "nicknames" }
 
 -- Parses a share string into a fresh table; returns nil, reason when it is not valid
 local function CVParseString(str)
@@ -1598,7 +1617,8 @@ function Engine:ImportCustomVoice(str)
     end
     for _, check in ipairs({ { "upbringing", self.Data.Upbringings }, { "trait", self.Data.Traits },
         { "trait2", self.Data.Traits },
-        { "dialectStrength", CV_DIALECT_STRENGTHS } }) do
+        { "dialectStrength", CV_DIALECT_STRENGTHS }, { "taunts", Tune.TAUNT_LEVELS },
+        { "nicknames", Tune.NICKNAME_MODES } }) do
         local field, known = check[1], check[2]
         if parsed[field] and not known[parsed[field]] then
             notes[#notes + 1] = field .. " '" .. parsed[field] .. "' (unknown)"
@@ -2550,6 +2570,9 @@ function Engine:BuildBugReport(note)
         str(db.fixTypos == true), str(db.abilityAuto ~= false), str(db.dungeonQuiet == true), str(db.outOfCharacter == true),
         str(self:GetMood() or "normal"), Count(char.SeenSpells), Count(char.AbilityMap), Count(char.AbilityEvery),
         Count(cv.extraLines)))
+    add(string.format("Chat: taunts=%s nicknames=%s translateKey=%s preview=%s tauntButton=%s",
+        str(cv.taunts or "off"), str(cv.nicknames or "off"), str(db.translateKey or "ENTER"), str(db.chatPreview ~= false),
+        str(db.tauntButtonShown == true)))
     local press = db.pressVoice or {}
     local places, blocked = {}, {}
     for _, place in ipairs({ "world", "worldpvp", "dungeon", "raid", "battleground", "boss" }) do
@@ -4921,6 +4944,8 @@ end
 -- Usable pool for a situation key: the active profile's own first, then the shared one
 -- Returns pool, deckKey. An allegiance's foe lines (Azeroth Identity) win most of the time.
 function Engine:GetSituationPool(key)
+    local tauntRace, tauntFaction = tostring(key):match("^Taunt_(%a+)_(%a+)$")
+    if tauntRace then return self:GetTauntPool(tauntRace, tauntFaction) end
     local own = self.ActiveProfile.Situations
     local pool = type(own) == "table" and own[key] or nil
     if not UsablePool(pool) then pool = self.Data.Situations[key] end
@@ -5252,6 +5277,8 @@ function Engine:GetSituations(unit)
     if classKey and UnitCanAttack("player", unit) then
         add(classKey, W_NAMED)
         for _, key in ipairs(PlayerFoeKeys(unit)) do add(key, W_NAMED) end
+        local tauntKey = self:TauntKey(unit)
+        if tauntKey then add(tauntKey, W_NAMED) end
     end
 
     return list, tokens
@@ -5447,6 +5474,122 @@ function Engine:GetZonePool()
     return nil
 end
 
+---------------------------------------------------------------------------
+-- Taunts and race nicknames (My Voice > Enemy Faction; lines in situations/Taunts.lua)
+---------------------------------------------------------------------------
+
+-- "CIVIL", "ROUGH", "SAVAGE" or nil (Off) for this character
+function Engine:GetTauntLevel()
+    local cv = MonologueCharDB and MonologueCharDB.CustomVoice
+    local level = type(cv) == "table" and cv.taunts or nil
+    return Tune.TAUNT_LEVELS[level] and level or nil
+end
+
+-- "Taunt_<raceFile>_<faction>" for an enemy player of the other faction, when taunts are on
+function Engine:TauntKey(unit)
+    if not self:GetTauntLevel() or not IsHostilePlayer(unit) then return nil end
+    local _, race = UnitRace(unit)
+    race = Clean(race)
+    local faction = Clean(UnitFactionGroup(unit))
+    if type(race) ~= "string" or not race:match("^%a+$") then return nil end
+    if faction ~= "Alliance" and faction ~= "Horde" then return nil end
+    return "Taunt_" .. race .. "_" .. faction
+end
+
+-- The taunt pool for a race and faction at this character's level: the faction's lines plus
+-- the race's own, with {nick} / {nicks} filled in. Returns pool, deckKey or nil.
+function Engine:GetTauntPool(race, faction, levelOverride)
+    local level = levelOverride or self:GetTauntLevel()
+    local data = self.Data.Taunts
+    if not level or type(data) ~= "table" then return nil end
+    local cacheKey = level .. "_" .. race .. "_" .. faction
+    local cache = self.State.TauntPools
+    if type(cache) ~= "table" then
+        cache = {}
+        self.State.TauntPools = cache
+    end
+    if cache[cacheKey] == nil then
+        local section = data[Tune.TAUNT_LEVELS[level]] or {}
+        local nick = type(data.Nicknames) == "table" and data.Nicknames[race] or nil
+        local function Cap(word) return (word:gsub("^%l", string.upper)) end
+        local pool = {}
+        for _, lines in ipairs({ section[faction], section[race] }) do
+            for _, line in ipairs(type(lines) == "table" and lines or {}) do
+                if nick then
+                    line = line:gsub("{Nicks}", Cap(nick.many)):gsub("{Nick}", Cap(nick.one))
+                    line = line:gsub("{nicks}", nick.many):gsub("{nick}", nick.one)
+                end
+                if not line:find("{[Nn]ick") then pool[#pool + 1] = line end
+            end
+        end
+        cache[cacheKey] = #pool > 0 and pool or false
+    end
+    if not cache[cacheKey] then return nil end
+    return cache[cacheKey], "Taunt_" .. cacheKey
+end
+
+-- Race words the translator swaps for nicknames ("orcs" -> "green skins"), longest first:
+-- { key = "night elves", nick = "pointies" } or, for a word that is the same in singular and
+-- plural, { key = "tauren", one = "grass muncher", many = "grass munchers" }. nil when off.
+function Engine:GetNicknameSwaps()
+    local cv = MonologueCharDB and MonologueCharDB.CustomVoice
+    local mode = type(cv) == "table" and cv.nicknames or nil
+    if not Tune.NICKNAME_MODES[mode] then return nil end
+    local mine = Clean(UnitFactionGroup("player"))
+    if mode == "ENEMY" and mine ~= "Alliance" and mine ~= "Horde" then return nil end
+    local cacheKey = mode .. "_" .. tostring(mine)
+    local cache = self.State.NicknameSwaps
+    if type(cache) == "table" and cache.key == cacheKey then return cache.list end
+    local list = {}
+    local nicknames = type(self.Data.Taunts) == "table" and self.Data.Taunts.Nicknames or {}
+    for _, nick in pairs(nicknames) do
+        if mode == "ALL" or (nick.faction and nick.faction ~= mine) then
+            for word, form in pairs(nick.words or {}) do
+                list[#list + 1] = { key = word, one = nick.one, many = nick.many,
+                    nick = (form == "one" and nick.one) or (form == "many" and nick.many) or nil }
+            end
+        end
+    end
+    table.sort(list, function(a, b)
+        if #a.key ~= #b.key then return #a.key > #b.key end
+        return a.key < b.key
+    end)
+    self.State.NicknameSwaps = { key = cacheKey, list = list }
+    return list
+end
+
+-- Taunt button, keybind and /mono taunt (real clicks or key presses, so /s is allowed):
+-- taunts your enemy player target now, at your chosen level (Civil when taunts are Off).
+function Engine:TauntNow()
+    if not MonologueDB or not MonologueCharDB then return false end
+    if not IsHostilePlayer("target") then
+        Print("Target an enemy player of the other faction to taunt them.")
+        return false
+    end
+    local now = GetTime()
+    if now - (self.State.TauntedAt or -math.huge) < Tune.TAUNT_BUTTON_GAP then return false end
+    local _, race = UnitRace("target")
+    race = Clean(race)
+    local faction = Clean(UnitFactionGroup("target"))
+    local pool, deckKey
+    if type(race) == "string" and (faction == "Alliance" or faction == "Horde") then
+        pool, deckKey = self:GetTauntPool(race, faction, self:GetTauntLevel() or "CIVIL")
+    end
+    if not pool then
+        Print("No taunts fit that target.")
+        return false
+    end
+    local line = self:GetShuffledLine(deckKey, pool)
+    if not line then return false end
+    self.Cooldowns.GlobalBreath = 0
+    self.State.ExplicitLine = true
+    local okSpeak, ok = pcall(self.Speak, self, line, "SAY", "target", { key = "Taunt_Manual", duration = 2 }, nil, true)
+    self.State.ExplicitLine = nil
+    ok = okSpeak and ok
+    if ok then self.State.TauntedAt = now end
+    return ok
+end
+
 function Engine:HandleTargetChanged()
     -- Upgrade any first-name-only friend, rival or duel entry for this player first
     self:RefreshStoredNames("target")
@@ -5498,6 +5641,12 @@ function Engine:HandleTargetChanged()
         if #options > 0 and math.random() < self:GetSituationChance() then
             local pick = options[math.random(#options)]
             pool, categoryKey = pick[1], pick[2]
+        end
+        -- Taunts (My Voice > Enemy Faction), at the meanness you picked
+        local tauntKey = self:TauntKey("target")
+        if tauntKey and math.random() < Tune.TAUNT_SHARE then
+            local tauntPool, tauntDeck = self:GetSituationPool(tauntKey)
+            if tauntPool then pool, categoryKey = tauntPool, tauntDeck end
         end
     end
     -- Someone you have a record with: half the time the line reflects the score
@@ -7508,6 +7657,10 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage("  /mono say <idle|kill|pull|hurt|interrupt|heal|defend|greet|cry> [chance %] - a line on demand, for macros")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono map <spell> <attack|burst|defend|interrupt|heal|none|auto> - what kind of move a spell is (/mono map lists yours)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono test <text> - show what a message would turn into, without sending it")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono taunt - taunt your enemy player target now (also a button and a keybind)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono taunts <off|civil|rough|savage> - how mean you are to the other faction")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono nicknames <off|enemy|all> - race nicknames in your chat (orcs -> green skins)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono sendkey <enter|shift|ctrl> - translate typed chat on Enter, or only on Shift+Enter / Ctrl+Enter")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono abilities - open the Abilities tab (spell kinds, your own lines, pacing)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono lines - open the Voice Lines tab (where and how often /s lines are said)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono voice - open the My Voice tab (custom oaths, swaps, battle cries, export/import)")
@@ -7780,6 +7933,9 @@ SlashCmdList["MONOLOGUE"] = function(msg)
     elseif cmd == "greet" then
         Engine:GreetNow()
 
+    elseif cmd == "taunt" then
+        Engine:TauntNow()
+
     elseif cmd == "say" then
         -- One line per key press: a waiting line just said takes this press
         if not flushed then
@@ -7829,6 +7985,35 @@ SlashCmdList["MONOLOGUE"] = function(msg)
 
     elseif cmd == "abilities" then
         if MonologueUI and MonologueUI.ShowTab then MonologueUI:ShowTab("abilities") end
+
+    elseif cmd == "taunts" or cmd == "nicknames" then
+        local field = cmd
+        local choice = arg and arg:upper() or ""
+        local cv = Engine:GetCustomVoice() or {}
+        if choice == "" then
+            Print((field == "taunts" and "Taunts: " or "Race nicknames: ") .. tostring(cv[field] or "off"):lower()
+                .. (field == "taunts" and ". /mono taunts <off|civil|rough|savage>" or ". /mono nicknames <off|enemy|all>"))
+        else
+            local ok = Engine:CustomVoiceSetIdentity(field, choice)
+            if not ok then
+                Print(field == "taunts" and "Taunts: off, civil, rough or savage." or "Race nicknames: off, enemy or all.")
+            else
+                Print((field == "taunts" and "Taunts: " or "Race nicknames: ") .. choice:lower() .. ".")
+                if MonologueUI and MonologueUI.OnVoiceChanged then pcall(MonologueUI.OnVoiceChanged, MonologueUI) end
+            end
+        end
+
+    elseif cmd == "sendkey" then
+        local choice = arg and arg:upper() or ""
+        if choice == "CONTROL" then choice = "CTRL" end
+        if choice == "ENTER" or choice == "SHIFT" or choice == "CTRL" then
+            MonologueDB.translateKey = choice
+            Print(choice == "ENTER" and "Typed chat is translated when you press Enter."
+                or ("Typed chat is translated only on " .. (choice == "SHIFT" and "Shift" or "Ctrl") .. "+Enter; plain Enter sends it as typed."))
+            if MonologueUI and MonologueUI.Refresh then pcall(MonologueUI.Refresh, MonologueUI) end
+        else
+            Print("Translate on: " .. tostring(MonologueDB.translateKey or "ENTER"):lower() .. ". /mono sendkey <enter|shift|ctrl>")
+        end
 
     elseif cmd == "mood" then
         if not arg or arg == "" then

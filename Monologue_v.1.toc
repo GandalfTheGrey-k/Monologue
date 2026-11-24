@@ -2,7 +2,7 @@
 ## Title: Monologue |cff00ccff(v.1)|r
 ## Notes: Public RP & RP-PvP Engine with real-time dialect translation and reactive banter.
 ## Author: Monologue Framework
-## Version: 0.1.4.1
+## Version: 0.1.4.5
 ## Category: Roleplay
 ## SavedVariables: MonologueDB
 ## SavedVariablesPerCharacter: MonologueCharDB
@@ -34,6 +34,7 @@ situations\Moments.lua
 situations\Moods.lua
 situations\Banter.lua
 situations\Abilities.lua
+situations\Taunts.lua
 identity\Identity.lua
 identity\Builder.lua
 identity\Layers.lua

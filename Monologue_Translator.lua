@@ -383,6 +383,59 @@ local function ReplacePhrase(text, entry, Preserve, chance)
     return table.concat(out)
 end
 
+-- Race nicknames (My Voice > Enemy Faction, /mono nicknames): "the orcs" -> "the green skins",
+-- in any letter case. A word that is the same in singular and plural (tauren, undead) reads as
+-- one after "a", "one", "this"... or before a class name ("an undead mage"), and as many
+-- otherwise. A nickname takes a capital only at the start of a sentence (or in SHOUTING), and
+-- "a" / "an" in front of it is corrected. Each nickname is masked, so the accent leaves it alone.
+local NICK_ONE_BEFORE = { a = true, an = true, one = true, this = true, that = true, each = true,
+    every = true, another = true, single = true, lone = true }
+local NICK_ONE_AFTER = { warrior = true, paladin = true, hunter = true, rogue = true, priest = true,
+    shaman = true, mage = true, warlock = true, druid = true }
+local function ApplyNicknames(text, Preserve)
+    local engine = MonologueEngine
+    if not (engine and engine.GetNicknameSwaps) then return text end
+    local ok, list = pcall(engine.GetNicknameSwaps, engine)
+    if not ok or type(list) ~= "table" then return text end
+    for _, entry in ipairs(list) do
+        entry.pattern = entry.pattern or BuildPhrasePattern(entry.key)
+        local out, pos = {}, 1
+        while true do
+            local s, e = text:find(entry.pattern, pos)
+            if not s or e < s then break end
+            local lead = text:sub(pos, s - 1)
+            local source, prefix = text:sub(s, e), text:sub(1, s - 1)
+            local nick = entry.nick
+            if not nick then
+                local before = prefix:match("(%a+)%s*$")
+                local after = text:sub(e + 1):match("^%s*(%a+)")
+                local one = (before and NICK_ONE_BEFORE[before:lower()]) or (after and NICK_ONE_AFTER[after:lower()])
+                nick = one and entry.one or entry.many
+            end
+            local letters = source:gsub("%A", "")
+            if #letters >= 2 and letters == letters:upper() then
+                nick = nick:upper()
+            elseif source:match("^%u") and (prefix:match("^%s*$") or prefix:match("[%.!%?]%s*$")) then
+                nick = CapitalizeFirst(nick)
+            end
+            -- "an undead" -> "a bone back", "a elf" -> "an pointy" never happens
+            local article, gap = lead:match("%f[%a]([Aa][Nn]?)(%s+)$")
+            if article then
+                local want = nick:match("^[AEIOUaeiou]") and "an" or "a"
+                if article == article:upper() and #article == 2 then want = want:upper()
+                elseif article:match("^%u") then want = CapitalizeFirst(want) end
+                lead = lead:sub(1, #lead - #article - #gap) .. want .. gap
+            end
+            out[#out + 1] = lead
+            out[#out + 1] = Preserve(nick)
+            pos = e + 1
+        end
+        out[#out + 1] = text:sub(pos)
+        text = table.concat(out)
+    end
+    return text
+end
+
 -- Puts an oath in front of the line, as its own sentence, when the engine says the moment
 -- fits (State.OathMoment). Skipped when the line starts with a masked block (an emote, OOC
 -- text, a {token}) or already opens with an exclamation ("Ha! ...", "Oi! ...").
@@ -812,6 +865,8 @@ function Translator:Translate(text, intensity, dialectOverride)
     text = PreserveKeepWords(text, Preserve)
     -- Typed chat only: common typos fixed first (General tab)
     if self.TypedChat and MonologueDB and MonologueDB.fixTypos then text = FixTypos(text) end
+    -- Race nicknames run before names are kept, so "Orcs" mid-sentence is swapped too
+    text = ApplyNicknames(text, Preserve)
     text = PreserveTitles(text, Preserve)
     text = PreserveProperNouns(text, Preserve)
 
@@ -1080,6 +1135,13 @@ function Translator:ProcessEditBox(editBox)
         return Result("sent as typed (!!)")
     end
 
+    -- Send key (General tab, /mono sendkey): with Shift or Ctrl chosen, plain Enter sends as typed
+    if not self:SendKeyHeld() then
+        boxState.preview = nil
+        boxState.lastOutput = text
+        return Result("sent as typed (no " .. tostring(MonologueDB.translateKey) .. "+Enter)")
+    end
+
     local chatType = editBox:GetAttribute("chatType")
     local intensity = self:GetChannelIntensity(chatType)
     -- The preview (if any) belongs to this text only
@@ -1110,6 +1172,23 @@ function Translator:ProcessEditBox(editBox)
     boxState.lastOutput = translated
     self.Stats.translated = self.Stats.translated + 1
     return Result("translated", chatType)
+end
+
+-- True when this send should be translated: always with the Enter setting, otherwise only
+-- while the chosen modifier (Shift or Ctrl) is held as Enter is pressed
+function Translator:SendKeyHeld()
+    local key = MonologueDB and MonologueDB.translateKey
+    if key == "SHIFT" then return IsShiftKeyDown and IsShiftKeyDown() and true or false end
+    if key == "CTRL" then return IsControlKeyDown and IsControlKeyDown() and true or false end
+    return true
+end
+
+-- "Shift+Enter" / "Ctrl+Enter", or nil with the plain Enter setting
+function Translator:SendKeyLabel()
+    local key = MonologueDB and MonologueDB.translateKey
+    if key == "SHIFT" then return "Shift+Enter" end
+    if key == "CTRL" then return "Ctrl+Enter" end
+    return nil
 end
 
 -- Out of character: the Monologue keybind or /mono ooc, or Total RP 3 set to OOC
@@ -1181,7 +1260,8 @@ function Translator:UpdatePreview(editBox)
     previewFrame:ClearAllPoints()
     previewFrame:SetPoint("BOTTOMLEFT", editBox, "TOPLEFT", 0, 2)
     previewFrame:SetPoint("BOTTOMRIGHT", editBox, "TOPRIGHT", 0, 2)
-    previewText:SetText("|cff00ccff>|r |cffd8d8d8" .. translated .. "|r")
+    local keyLabel = self:SendKeyLabel()
+    previewText:SetText((keyLabel and ("|cff888888" .. keyLabel .. "|r ") or "") .. "|cff00ccff>|r |cffd8d8d8" .. translated .. "|r")
     previewFrame:SetHeight(math.max(14, (previewText:GetStringHeight() or 12) + 6))
     previewFrame:Show()
 end
