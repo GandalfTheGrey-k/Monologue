@@ -47,7 +47,7 @@ MonologueEngine.Data.Profiles["WebbPage"].RivalOpeners = {
     },
     SwornFoe = {
         "{target}, again? The wild never tires of you!",
-        "Here we go again, {target}. Bear or cat, you choose!",
+        "Again, {target}? Bear or cat, you choose!",
         "{target}! Back in my garden?",
         "You again, {target}? Weeds always return.",
     },

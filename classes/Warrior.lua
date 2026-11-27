@@ -45,14 +45,14 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
             "Straight backs, sharp edges.",
         },
         Tier3_LowHP = {
-            "Still standing. Barely.",
+            "Still on my feet. Just.",
             "Need a heal. Soon would be nice.",
             "That one went through.",
             "Not yet. Not here.",
             "Bleeding. Keep fighting.",
             "Healer! Anyone!",
             "Fine. I'm fine. Mostly.",
-            "Hold. Just hold.",
+            "Hold the line. Just hold it.",
         },
     },
     SpellTriggers = {
@@ -159,7 +159,7 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
                 "Sit down.",
                 "We're not done.",
                 "Get back in the fight!",
-                "No you don't.",
+                "You're staying, then.",
                 "Thought you'd slip off?",
             },
             EagerRookie = {
@@ -198,12 +198,12 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
         ["Execute"] = {
             Default = {
                 "That's done.",
-                "Stay down this time.",
-                "Finish it.",
+                "Don't get back up.",
+                "Down for good.",
                 "Last one.",
                 "You almost had me. Almost.",
                 "No getting up from that.",
-                "Rest now.",
+                "Lie still. It's over.",
                 "Clean.",
                 "That one's for the long walk here.",
                 "And that's the end of that.",
@@ -290,11 +290,11 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
         ["Recklessness"] = {
             big = true,
             Default = {
-                "No holding back now.",
+                "Caution's for the next fight.",
                 "Forget the shield.",
-                "All of it. Right now.",
+                "Every swing counts double.",
                 "Careful? No.",
-                "Everything I've got!",
+                "Shield's on my back. Both hands now!",
                 "Stand clear of me.",
                 "This is going to cost me.",
                 "Don't stand behind me. Or in front.",
@@ -338,7 +338,7 @@ MonologueEngine.Data.Classes["WARRIOR"] = {
             big = true,
             Default = {
                 "Shields up. Get behind me.",
-                "Let them come.",
+                "Let them hammer at the shield.",
                 "I'll hold. Get to work.",
                 "Behind me. Now!",
                 "Go on, hit the wall.",
@@ -395,48 +395,62 @@ do
         "Brace, {target}. Here I come.",
         "Running won't help, {target}.",
         "{target}! Over here.",
+        "Shield first, {target}. Then the rest.",
     }
     lines["Charge"].Elite = {
         "Big {mob}. Bigger charge.",
         "Straight at the {mob}. No hesitating.",
         "Always charge the big one.",
         "Shield up. That {mob} hits hard.",
+        "That {mob} looks heavy. Good.",
+        "Into the big one. Stay sharp.",
     }
     lines["Charge"].Rare = {
         "{mob}! Don't you dare run.",
         "Finally found you, {mob}.",
         "Charging before it vanishes.",
         "{mob}. Stay right there.",
+        "I've heard stories about you, {mob}.",
+        "Not slipping away this time, {mob}.",
     }
     lines["Charge"].Party = {
         "Charging in, {party}. Follow.",
         "I'll grab it, {party}. Hit what I hit.",
         "Watch my back, {party}. Going in.",
         "Pull's on me. Stay close.",
+        "On my mark, {party}. Now.",
+        "I'll take the hits, {party}. You take the kill.",
     }
     lines["Intercept"].Player = {
         "You're not getting away, {target}.",
         "Back here, {target}.",
         "Running? Not from me, {target}.",
         "Thought you were clear, {target}?",
-        "Not so fast, {target}.",
+        "Leaving, {target}?",
+        "Caught you, {target}.",
     }
     lines["Execute"].Player = {
         "Done, {target}.",
         "Should've run, {target}.",
         "That's the end of you, {target}.",
         "Good fight, {target}. Over now.",
+        "Rest easy, {target}. You fought well.",
+        "Too late to yield, {target}.",
     }
     lines["Execute"].Elite = {
         "Down you go, big {mob}.",
         "Finish the {mob}. Now.",
         "Tough {mob}. Not tough enough.",
         "That's the last swing, {mob}.",
+        "Heavy {mob}. Falls the same.",
+        "Last of your strength, {mob}. Mine too, nearly.",
     }
     lines["Execute"].Rare = {
         "Trophy time, {mob}.",
         "{mob}, you'll make a fine story.",
         "That's the end of the legend, {mob}.",
         "Rare kill. Remember this one.",
+        "Worth the walk, {mob}.",
+        "A trophy for the barracks wall.",
     }
 end

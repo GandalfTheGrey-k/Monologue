@@ -9,6 +9,7 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 ---
 
 ## Contents
+- [What's new in 0.1.5](#whats-new-in-015)
 - [What's new in 0.1.4.5](#whats-new-in-0145)
 - [What's new in 0.1.4.1](#whats-new-in-0141)
 - [What's new in 0.1.4](#whats-new-in-014)
@@ -26,6 +27,19 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 - [FAQ & troubleshooting](#faq--troubleshooting)
 
 ---
+
+## What's new in 0.1.5
+
+- **Every class sounds like itself.** Hunter, Mage, Paladin, Priest, Rogue, Shaman and Warlock lines are rewritten (140–165 lines each), and no line is shared between classes. Signature moves have their own lines: Polymorph, Counterspell, Ice Block, Hammer of Justice, Divine Shield, Psychic Scream, Mind Control, Sap, Kick, Vanish, Purge, Fear, Death Coil, Banish, Scatter Shot, Freezing Trap and more. Crowd control, interrupts and heals now speak mid-fight now and then.
+- **No more talking about yourself in the third person.** "The bear doesn't knock" is now "I don't knock", and so on across druids, races and profiles.
+- **Talking with other Monologue users** (Voice Lines tab, "Talk with other Monologue users"):
+  - When another user greets you, your character greets them back. You won't greet the same group member over and over.
+  - Banter becomes a short back-and-forth: the first speaker sometimes has the last word.
+  - New moments: level-ups, loot, and thanking the player who raised you.
+  - Answers change with who they are to you: friends get warmer ones, races you've set a cool stance toward get grudging ones, and someone of your own class gets ribbing.
+  - Duels: a line when you challenge or accept. When both duelists run Monologue, the loser concedes and the winner answers.
+  - Total RP names are used when people have them.
+- **Far fewer repeated lines.** About 2,400 new lines: every clan, upbringing, profession, trait, allegiance, emote reply, PvP and stance pool now has at least 6. Small pools are picked less often, a temperament now adds to your race's battle cries and greetings instead of replacing them, and Monologue remembers your last 40 lines across logins so they don't come straight back.
 
 ## What's new in 0.1.4.5
 

@@ -48,7 +48,7 @@ MonologueEngine.Data.Profiles["CarlNage"].GrowthStages = {
                 "Old bones, stubborn heart.",
                 "Bled worse in Blackrock.",
                 "Not me last stand. Not yet.",
-                "A dwarf dies when he's ready. I'm not.",
+                "I'll die when I'm ready. I'm not.",
                 "Patch me up. I've a tab to settle.",
                 "Stone cracks. It doesnae crumble.",
                 "Hurts. Good. Means I'm alive.",
@@ -84,7 +84,7 @@ MonologueEngine.Data.Profiles["CarlNage"].BossFeats = {
             Vendetta = {
                 "I've cleared Blackwing Lair, {target}. {lastzone} was a scrape.",
                 "Nefarian bled. So will ye.",
-                "I broke a black dragon's brood. Ye're one dwarf's grudge.",
+                "I broke a black dragon's brood. Ye're just another grudge.",
                 "After Blackrock, {lastzone} was a stroll.",
             },
         },

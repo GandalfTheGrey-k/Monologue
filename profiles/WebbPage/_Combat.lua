@@ -49,7 +49,7 @@ MonologueEngine.Data.Profiles["WebbPage"].SpellReactions = {
     -- Low health (25% or less, once per scare, in combat)
     Tier3_LowHP = {
         "Ow! Okay, that's the bad kind of bite!",
-        "Time to mend before I break!",
+        "I need to mend before I break!",
         "Somebody keep it off me for a second!",
         "Bears don't die. Bears get annoyed.",
         "Even oaks bend in a storm!",
@@ -75,7 +75,7 @@ MonologueEngine.Data.Profiles["WebbPage"].CombatOpeners = {
     "Hold still, I'm gardening.",
     "Fair winds to me. Foul ones to you.",
     "Let's see how you handle a storm with fur.",
-    "The Skyborne don't scare easy.",
+    "I don't scare easy.",
     "Nature called. I answered.",
     "Thorns out!",
 }
@@ -107,6 +107,6 @@ MonologueEngine.Data.Profiles["WebbPage"].SpellLines = {
         "Pruning time!",
         "The forest and the storm, together!",
         "The wild says no!",
-        "Leaf it to me!",
+        "Leave this one to me!",
     },
 }

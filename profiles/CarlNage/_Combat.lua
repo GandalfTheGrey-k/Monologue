@@ -52,7 +52,7 @@ MonologueEngine.Data.Profiles["CarlNage"].SpellLines = {
     ["Charge"] = {
         Default = {
             "Mind yer toes.",
-            "Here's Carl.",
+            "Here I come.",
             "Hold still, I'm comin' to ye.",
             "Short legs. Long reach.",
             "Out o' the road!",
@@ -96,12 +96,12 @@ MonologueEngine.Data.Profiles["CarlNage"].SpellLines = {
 -- Carl's own world reactions (over the Dwarf and shared Situations pools)
 MonologueEngine.Data.Profiles["CarlNage"].Situations = {
     Revenge = {
-        "{killer}. Carl Nage doesn't forget a face. Or a snout.",
+        "{killer}. I don't forget a face. Or a snout.",
         "Ye got me once. That's all ye get.",
         "Back from the graveyard, an' it's yer turn.",
         "Thought ye'd seen the last o' me? Shame.",
         "Grudge settled in three, two...",
-        "Same beast. Different dwarf. Angrier one.",
+        "Same beast. I'm just angrier now.",
     },
     GrindStreak = {
         "{mob} number {count}. I'll have a rug made.",

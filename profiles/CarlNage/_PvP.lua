@@ -29,7 +29,7 @@ MonologueEngine.Data.Profiles["CarlNage"].RivalOpeners = {
     },
     Default = {
         "Oi. You.",
-        "Here's a dwarf for ye.",
+        "Here I come again.",
         "Steady now, {target}.",
         "Ye'll do.",
     },

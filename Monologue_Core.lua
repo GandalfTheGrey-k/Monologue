@@ -261,6 +261,7 @@ local CHAR_DB_KEYS = {
     "Duels",           -- Duel records (separate from Rivals): [normalizedName] = { name, wins, losses, lastZone, lastTime }
     "CustomVoice",     -- My Voice: { persona, oaths, wordSwaps, phraseSwaps, battleCries, guildGreeting }
     "AbilityMap",      -- Abilities tab: [spell name] = Attack | Burst | Defend | Interrupt | Heal | None
+    "RecentLines",     -- The last lines drawn, kept across logins so they aren't said again soon: { { k, t }, ... }
     "AbilityEvery",    -- Abilities tab: [spell name] = N (speaks on every Nth cast only)
     "SeenSpells",      -- Abilities tab: [spell name] = { id, at } for spells you have cast
 }
@@ -296,7 +297,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.4.5"
+Engine.VERSION = "0.1.5"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -828,6 +829,14 @@ function Engine:GetShuffledLine(categoryKey, linesTable)
         end
         self:Debug("echo suppressed: a party member just said that line")
     end
+    -- Said recently (in any pool, this session or the last): draw another if there is one
+    if self.IsRecentlySaid and #deck > 0 and self:IsRecentlySaid(line) then
+        for _ = 1, #deck do
+            table.insert(deck, 1, line)
+            line = table.remove(deck)
+            if not self:IsRecentlySaid(line) then break end
+        end
+    end
     -- Requires rule: a line whose detail tokens ({weapon}, {party}, ...) can't be filled
     -- right now goes to the bottom of the deck and the next card is drawn
     if self.LineDetailsAvailable and not self:LineDetailsAvailable(line) then
@@ -850,6 +859,7 @@ function Engine:GetShuffledLine(categoryKey, linesTable)
     end
     recent[#recent + 1] = line
     if #recent > 3 then table.remove(recent, 1) end
+    if self.NoteRecentLine then pcall(self.NoteRecentLine, self, line) end
     return line
 end
 
@@ -1786,16 +1796,24 @@ local LAYER_WEIGHTS = {
 
 -- Returns deckKey, pool, label (or nil). classDeck/classPool/classLabel: the caller's own
 -- pool (a spell's lines, the class low-health lines); raceDeck/racePool likewise.
+-- A layer's weight shrinks when it has few lines (a 1-line layer is chosen 1/8 as often as a
+-- full one), and all the pools of the chosen layer (clan + upbringing, hometown + professions
+-- + anchors, ...) share one deck, so a tiny pool never repeats the same line over and over
+Tune.LAYER_FULL_SIZE = 8
 function Engine:PickLayeredPool(kind, classDeck, classPool, classLabel, raceDeck, racePool)
     local layers, total = {}, 0
     local function layer(name, subs)
-        local usable = {}
+        local usable, lines = {}, 0
         for _, sub in ipairs(subs) do
-            if UsablePool(sub[2]) then usable[#usable + 1] = sub end
+            if UsablePool(sub[2]) then
+                usable[#usable + 1] = sub
+                lines = lines + #sub[2]
+            end
         end
         if #usable > 0 then
-            layers[#layers + 1] = { name = name, weight = LAYER_WEIGHTS[name], subs = usable }
-            total = total + LAYER_WEIGHTS[name]
+            local weight = LAYER_WEIGHTS[name] * math.min(1, lines / Tune.LAYER_FULL_SIZE)
+            layers[#layers + 1] = { name = name, weight = weight, subs = usable }
+            total = total + weight
         end
     end
     local cv = self:GetCustomVoice() or {}
@@ -1865,8 +1883,16 @@ function Engine:PickLayeredPool(kind, classDeck, classPool, classLabel, raceDeck
         roll = roll - entry.weight
         if roll <= 0 then chosen = entry; break end
     end
-    local sub = chosen.subs[math.random(#chosen.subs)]
-    return sub[1], sub[2], sub[3]
+    if #chosen.subs == 1 then
+        local sub = chosen.subs[1]
+        return sub[1], sub[2], sub[3]
+    end
+    local combined, labels = {}, {}
+    for _, sub in ipairs(chosen.subs) do
+        for _, line in ipairs(sub[2]) do combined[#combined + 1] = line end
+        labels[#labels + 1] = sub[3]
+    end
+    return "Layer_" .. chosen.name .. "_" .. kind, combined, table.concat(labels, " + ")
 end
 
 -- Identity-only lines for a moment (no class pool): Greet, Idle, Loot, Kill, ...
@@ -2100,7 +2126,10 @@ function Engine:HandleLootOpened()
     local now = GetTime()
     if now - (self.State.LootLineAt or -math.huge) < Tune.LOOT_COOLDOWN then return end
     local deckKey, pool = self:PickIdentityPool("Loot")
-    if pool and self:SayIdentityMoment(deckKey, pool, Tune.LOOT_CHANCE) then self.State.LootLineAt = now end
+    self.State.BanterTopic = "Loot"
+    local ok, said = pcall(self.SayIdentityMoment, self, deckKey, pool, Tune.LOOT_CHANCE)
+    self.State.BanterTopic = nil
+    if pool and ok and said then self.State.LootLineAt = now end
 end
 
 -- A kill (combat ends with your enemy target dead): now and then a line from any layer.
@@ -2270,8 +2299,9 @@ function Engine:BroadcastIdentity(force)
     if not force and now - (self.State.CommIdAt or -math.huge) < Tune.COMM_ID_THROTTLE then return end
     self.State.CommIdAt = now
     local cv = self:GetCustomVoice() or {}
+    -- Last field: "b" = answers party banter, "q" = banter switched off
     self:SendComm(table.concat({ "I", COMM_VERSION, CommField(cv.allegiance), CommField(cv.clan),
-        CommField(cv.trait), CommField(cv.upbringing) }, "^"))
+        CommField(cv.trait), CommField(cv.upbringing), (MonologueDB and MonologueDB.partyBanter == false) and "q" or "b" }, "^"))
 end
 
 -- GROUP_ROSTER_UPDATE: announce yourself (debounced), ask who's here when you join a group,
@@ -2304,15 +2334,32 @@ function Engine:HandleAddonMessage(prefix, text, channel, sender)
     if prefix ~= COMM_PREFIX or type(text) ~= "string" then return end
     local name = ShortName(sender)
     if not name or name == ShortName(UnitName("player")) then return end
-    if not (UnitInParty(name) or UnitInRaid(name)) then return end
     local kind = text:sub(1, 1)
-    if kind == "I" then
-        local _, version, allegiance, clan, trait, upbringing = strsplit("^", text)
+    -- Greetings, thanks and duels may come over the guild channel; everything else is group-only
+    if channel == "GUILD" then
+        if kind ~= "G" and kind ~= "T" and kind ~= "D" then return end
+    elseif not (UnitInParty(name) or UnitInRaid(name)) then
+        return
+    end
+    if kind == "G" or kind == "T" then
+        local target = text:match("^%a%^([^%^]+)$")
+        if target and self:IsMyName(target) then
+            if kind == "G" then pcall(self.HandleGreetedBy, self, name) else pcall(self.HandleThanked, self, name) end
+        end
+    elseif kind == "R" then
+        local target, topic = text:match("^R%^([^%^]+)%^(%a+)$")
+        if target and self:IsMyName(target) then pcall(self.HandleBanterReply, self, name, topic) end
+    elseif kind == "D" then
+        local target, phase = text:match("^D%^([^%^]+)%^(%a)$")
+        if target and self:IsMyName(target) then pcall(self.HandleDuelComm, self, name, phase) end
+    elseif kind == "I" then
+        local _, version, allegiance, clan, trait, upbringing, flags = strsplit("^", text)
         local function field(v) return (v and v ~= "-" and v ~= "") and v or nil end
         self.State.PartyIdentities = self.State.PartyIdentities or {}
         self.State.PartyIdentities[name] = {
             version = version, allegiance = field(allegiance), clan = field(clan),
             trait = field(trait), upbringing = field(upbringing), at = GetTime(),
+            banter = flags ~= "q",   -- older versions send no flag: assume banter is on
         }
         self:Debug("party: " .. name .. " runs Monologue (" .. text .. ")")
     elseif kind == "Q" then
@@ -2333,10 +2380,10 @@ function Engine:HandleAddonMessage(prefix, text, channel, sender)
 end
 
 -- Says a background party line about `name` ({target} = them), short shelf life
-function Engine:SayPartyLine(categoryKey, pool, chance, name)
+function Engine:SayPartyLine(categoryKey, pool, chance, name, kind)
     if not UsablePool(pool) then return false end
-    self.State.SpeakKind = "party"
-    self.State.TokenTargetName = name
+    self.State.SpeakKind = kind or "party"
+    self.State.TokenTargetName = name and self:PartyDisplayName(name) or nil
     self.State.BareLine = true
     local ok, spoke = pcall(self.ProcessTrigger, self, Tune.PARTY_MOMENT_TIER, categoryKey, pool, chance, nil)
     self.State.SpeakKind = nil
@@ -2369,11 +2416,11 @@ function Engine:HandleGroupVictory(kind)
     if not (IsInGroup and IsInGroup()) or UnitIsDeadOrGhost("player") then return end
     local me = ShortName(UnitName("player"))
     local first = me
-    local recent = GetTime() - 600
-    for name, info in pairs(self.State.PartyIdentities or {}) do
-        if info.at and info.at >= recent and name < first then first = name end
+    -- Every client must pick the same speaker: everyone in the group known to run Monologue
+    -- (players who leave are dropped on the roster update), however long ago they said so
+    for name in pairs(self.State.PartyIdentities or {}) do
+        if name < first and (UnitInParty(name) or UnitInRaid(name)) then first = name end
     end
-    -- Identities older than 10 min are refreshed on the next roster change; that's fine here
     if first ~= me then return end
     local pool, deckKey = self:GetTraitPool("Victory")
     self:Debug("party: " .. kind .. " down, victory line")
@@ -2493,6 +2540,38 @@ function Engine:AddPartyLine(hash, text)
     self.State.RecentPartyLines = cache
     cache[#cache + 1] = { hash = hash, text = text, at = GetTime() }
     while #cache > Tune.ECHO_MAX do table.remove(cache, 1) end
+end
+
+-- Recent-lines memory (MonologueCharDB.RecentLines): the last Tune.RECENT_MAX lines drawn,
+-- by wall-clock time so it survives a relog. GetShuffledLine skips them when it can.
+Tune.RECENT_MAX = 40
+Tune.RECENT_TTL = 6 * 3600
+function Engine:RecentLineList()
+    local char = MonologueCharDB
+    if type(char) ~= "table" then return nil end
+    if type(char.RecentLines) ~= "table" then char.RecentLines = {} end
+    return char.RecentLines
+end
+
+local function WallClock()
+    return (GetServerTime and GetServerTime()) or time()
+end
+
+function Engine:IsRecentlySaid(line)
+    local list, key = self:RecentLineList(), NormalizeLine(line)
+    if not list or not key then return false end
+    local now = WallClock()
+    for _, entry in ipairs(list) do
+        if type(entry) == "table" and entry.k == key and now - (tonumber(entry.t) or 0) < Tune.RECENT_TTL then return true end
+    end
+    return false
+end
+
+function Engine:NoteRecentLine(line)
+    local list, key = self:RecentLineList(), NormalizeLine(line)
+    if not list or not key then return end
+    list[#list + 1] = { k = key, t = WallClock() }
+    while #list > Tune.RECENT_MAX do table.remove(list, 1) end
 end
 
 function Engine:IsPartyEcho(line)
@@ -2684,7 +2763,8 @@ end
 
 -- Applies one race Presets entry onto the merged profile (a private copy). A preset may
 -- define: name, dialectIntensity (-1..+1 shift of the intensity tier), oaths (replace the
--- race's), FriendGreetings (merged per pool) and BattleCry (replaces).
+-- race's), FriendGreetings and BattleCry (added in front of the race's own, per pool, so the
+-- temperament colours the lines without shrinking them).
 local function ApplyRacePreset(merged, raceData, presetKey)
     local presets = type(raceData.Presets) == "table" and raceData.Presets or nil
     local preset = presets and presetKey and presets[presetKey]
@@ -2692,10 +2772,23 @@ local function ApplyRacePreset(merged, raceData, presetKey)
 
     if type(merged.Dialect) ~= "table" then merged.Dialect = {} end
     if type(preset.oaths) == "table" and next(preset.oaths) ~= nil then merged.Dialect.oaths = DeepCopy(preset.oaths) end
-    if type(preset.FriendGreetings) == "table" then
-        merged.FriendGreetings = DeepMerge(type(merged.FriendGreetings) == "table" and merged.FriendGreetings or {}, preset.FriendGreetings)
+    local function Combined(lines, base)
+        local out = DeepCopy(lines)
+        if type(base) == "table" then
+            for _, line in ipairs(base) do out[#out + 1] = line end
+        end
+        return out
     end
-    if type(preset.BattleCry) == "table" and #preset.BattleCry > 0 then merged.BattleCry = DeepCopy(preset.BattleCry) end
+    if type(preset.FriendGreetings) == "table" then
+        local greetings = type(merged.FriendGreetings) == "table" and merged.FriendGreetings or {}
+        for poolKey, lines in pairs(preset.FriendGreetings) do
+            if type(lines) == "table" and #lines > 0 then greetings[poolKey] = Combined(lines, greetings[poolKey]) end
+        end
+        merged.FriendGreetings = greetings
+    end
+    if type(preset.BattleCry) == "table" and #preset.BattleCry > 0 then
+        merged.BattleCry = Combined(preset.BattleCry, merged.BattleCry)
+    end
     if type(preset.dialectIntensity) == "number" then merged.DialectIntensity = Clamp(preset.dialectIntensity, -1, 1) end
     return presetKey
 end
@@ -3184,6 +3277,7 @@ function Engine:QueueSpeech(text, chatType, targetUnit, emoteToken, reason, sayT
         sayText = sayText, sayType = sayType, kind = kind,
         maxAge = (kind == "greeting" and GREETING_MAX_AGE) or (kind == "party" and PARTY_MAX_AGE) or PENDING_MAX_AGE,
         queuedAt = GetTime(), attempts = 0, topic = self.State.BanterTopic,
+        comm = self.State.CommOnSay, tag = self.State.PendingTag,
         -- The moment it belongs to: a line is dropped once you've changed zone or gone into or
         -- out of combat, so it never comes out somewhere it doesn't fit
         zone = Clean(GetRealZoneText()), inCombat = UnitAffectingCombat("player") and true or false,
@@ -3289,6 +3383,7 @@ function Engine:FlushPendingSpeech(source)
     self:Debug("speech route: queued line said on your " .. ((source == "slash") and "ability press / click"
         or tostring(source)) .. " -> " .. chatType)
     if pending.topic then pcall(self.SendBanterTopic, self, pending.topic) end
+    if pending.comm then pcall(self.SendCommOnSay, self, pending.comm) end
     PairEmote(pending.targetUnit, pending.emoteToken)
     return true
 end
@@ -3453,6 +3548,7 @@ function Engine:Speak(text, chatType, targetUnit, categoryCooldown, emoteToken, 
     if problem == "ratelimited" then return true, "local" end
     self:Debug("speech sent via " .. outType .. " (asked for " .. chatType .. "): " .. outText)
     if self.State.BanterTopic then pcall(self.SendBanterTopic, self, self.State.BanterTopic) end
+    if self.State.CommOnSay then pcall(self.SendCommOnSay, self, self.State.CommOnSay) end
 
     -- Cross-Faction Native Emote Pairing
     PairEmote(targetUnit, emoteToken)
@@ -3972,6 +4068,7 @@ function Engine:NoteDuelChallenge(unit)
     self.State.LastDuelActivity = GetTime()
     if type(unit) == "string" and UnitExists(unit) and UnitIsPlayer(unit) then
         self:SetDuelOpponent(UnitNameAndRealm(unit), false)
+        pcall(self.DuelStarting, self, UnitNameAndRealm(unit), unit, "Challenge")
     end
 end
 
@@ -3990,6 +4087,7 @@ function Engine:HandleDuelEvent(event, ...)
     self:Debug("duel event " .. tostring(event) .. (who and (" (" .. tostring(who) .. ")") or ""))
     if event == "DUEL_REQUESTED" then
         self:SetDuelOpponent((...), false)
+        pcall(self.DuelStarting, self, (...), nil, "Accept")
     elseif event == "DUEL_INBOUNDS" then
         if not self.State.Duel and UnitExists("target") and UnitIsPlayer("target") then
             self:SetDuelOpponent(UnitNameAndRealm("target"), true)
@@ -3999,6 +4097,9 @@ function Engine:HandleDuelEvent(event, ...)
         end
     elseif event == "DUEL_FINISHED" then
         self.State.Duel = nil
+        -- A challenge or acceptance line not yet said belongs to a duel that never happened
+        local pending = self.State.Pending
+        if pending and pending.tag == "duelopen" then self.State.Pending = nil end
     end
 end
 
@@ -4100,7 +4201,7 @@ function Engine:HandleDuelResult(winnerRaw, loserRaw)
     self.State.Duel = nil
     self:Debug("duel recorded: " .. (won and "WIN" or "LOSS") .. " vs " .. opponent)
     self:RecordDuel(opponent, won)
-    self:SpeakDuelLine(opponent, won)
+    self:DuelResultTalk(opponent, won)
 end
 
 -- CHAT_MSG_SYSTEM: "<Winner> has defeated <Loser> in a duel" (or "<Loser> has fled from
@@ -4537,18 +4638,23 @@ function Engine:HandleFriendlyTarget()
         if now - at > GUILD_GREET_COOLDOWN then greeted[key] = nil end
     end
     if greeted[who] then return end
+    if self:GreetBlocked("target") then return end
 
     local categoryKey, pool, chance = self:PickGreeting("target")
     if not pool then return end
 
+    local targetName = ShortName(UnitName("target"))
     self.State.SpeakKind = "greeting"
     self.State.OathMoment = "Greet"
+    self.State.CommOnSay = self:CommFor("G", targetName, "target")
     local okTrigger, spoke = pcall(self.ProcessTrigger, self, 5, categoryKey, pool, chance, "target")
     self.State.SpeakKind = nil
     self.State.OathMoment = nil
+    self.State.CommOnSay = nil
     spoke = okTrigger and spoke
     if spoke then
         greeted[who] = now
+        self:NoteGreeted(targetName)
     end
 end
 
@@ -4708,11 +4814,15 @@ function Engine:GreetNow()
     self.Cooldowns.GlobalBreath = 0
     self.State.OathMoment = "Greet"
     self.State.ExplicitLine = true
+    local targetName = ShortName(UnitName("target"))
+    self.State.CommOnSay = self:CommFor("G", targetName, "target")
     local okSpeak, ok = pcall(self.Speak, self, line, "SAY", "target", { key = "Greet_Manual", duration = 2 }, nil, true)
+    self.State.CommOnSay = nil
     self.State.OathMoment = nil
     self.State.ExplicitLine = nil
     ok = okSpeak and ok
     if ok and who then greeted[who] = GetTime() end
+    if ok then self:NoteGreeted(targetName) end
     return ok
 end
 
@@ -6312,7 +6422,7 @@ end
 Tune.BANTER_CHANCE = 0.35
 Tune.BANTER_COOLDOWN = 180
 Tune.BANTER_MOMENT = { chance = 1, cooldown = 60 }
-Tune.BANTER_TOPICS = { Kill = true, Idle = true, EatDrink = true, Rest = true, Mount = true }
+Tune.BANTER_TOPICS = { Kill = true, Idle = true, EatDrink = true, Rest = true, Mount = true, Loot = true, Level = true }
 
 function Engine:SendBanterTopic(topic)
     if not MonologueDB or MonologueDB.partyBanter == false then return end
@@ -6330,8 +6440,8 @@ function Engine:HandleBanter(topic, sender)
     local me = ShortName(UnitName("player"))
     if not me or me == sender then return end
     local names = { me }
-    for name in pairs(self.State.PartyIdentities or {}) do
-        if name ~= sender and name ~= me then names[#names + 1] = name end
+    for name, info in pairs(self.State.PartyIdentities or {}) do
+        if name ~= sender and name ~= me and info.banter ~= false then names[#names + 1] = name end
     end
     table.sort(names)
     local pick = names[(math.floor((GetServerTime and GetServerTime() or time()) / 60) % #names) + 1]
@@ -6341,10 +6451,284 @@ function Engine:HandleBanter(topic, sender)
     if math.random() >= Tune.BANTER_CHANCE then return end
     self:Debug("party banter: answering " .. sender .. " (" .. topic .. ")")
     C_Timer.After(1.5 + math.random() * 2, function()
-        Engine.State.SpeakKind = "party"
-        local said = Engine:SayMoment("Banter_" .. topic, nil, sender, true)
-        Engine.State.SpeakKind = nil
-        if said then Engine.State.BanterAt = GetTime() end
+        local deckKey, pool = Engine:BanterAnswerPool(topic, sender)
+        -- Once said, tell them, so they can have the last word
+        Engine.State.CommOnSay = Engine:CommFor("R", sender, nil, topic)
+        local ok, said = pcall(Engine.SayPartyLine, Engine, deckKey, pool, 1, sender)
+        Engine.State.CommOnSay = nil
+        if ok and said then Engine.State.BanterAt = GetTime() end
+    end)
+end
+
+---------------------------------------------------------------------------
+-- Talking with other Monologue users. Directed messages on MONO_RP (party/raid, or guild for
+-- greetings, thanks and duels), each sent only once its line is really said aloud
+-- (State.CommOnSay rides along with the line, queued or not):
+--   G^name          I just greeted <name>                -> they may greet back
+--   R^name^topic    I just answered <name>'s banter      -> they may have the last word
+--   T^name          I just thanked <name> for raising me -> they may answer
+--   D^name^H        I'm about to duel <name> and run Monologue (sent straight away)
+--   D^name^E        I lost to <name> and said so          -> the winner answers
+---------------------------------------------------------------------------
+Tune.GREET_REPLY_CHANCE = 0.8
+Tune.GREET_REPLY_COOLDOWN = 600
+Tune.GROUP_GREET_GAP = 1800       -- greeted someone: no automatic greeting again for 30 min,
+                                  -- and none at all while you're still grouped with them
+Tune.BANTER_CLOSE_CHANCE = 0.35
+Tune.BANTER_CLOSE_COOLDOWN = 120
+Tune.BANTER_RELATION_SHARE = 0.6
+Tune.REZ_THANKS_CHANCE = 0.7
+Tune.REZ_WINDOW = 120
+Tune.THANKS_REPLY_CHANCE = 0.6
+Tune.DUEL_OPEN_CHANCE = 0.7
+Tune.DUEL_REPLY_WAIT = 8
+Tune.DUEL_MONO_WINDOW = 300
+Tune.COOL_STANCES = { WARY = true, GRUFF = true, DISDAINFUL = true }
+
+function Engine:IsMyName(name)
+    local me = ShortName(UnitName("player"))
+    return type(name) == "string" and me ~= nil and NormalizeNameKey(name) == NormalizeNameKey(me)
+end
+
+-- A unit token for a short name: your target, mouseover or focus, or a group member
+function Engine:UnitForName(name)
+    if type(name) ~= "string" or name == "" then return nil end
+    local key = NormalizeNameKey(name)
+    local function Matches(unit)
+        if not (UnitExists(unit) and UnitIsPlayer(unit)) then return false end
+        local short = ShortName(UnitName(unit))
+        return short ~= nil and NormalizeNameKey(short) == key
+    end
+    for _, unit in ipairs({ "target", "mouseover", "focus" }) do
+        if Matches(unit) then return unit end
+    end
+    local prefix, count = "party", 4
+    if IsInRaid and IsInRaid() then prefix, count = "raid", 40 end
+    for i = 1, count do
+        if Matches(prefix .. i) then return prefix .. i end
+    end
+    return nil
+end
+
+-- The name to use for {target} in a line about another player: their Total RP / MSP name
+-- when they have one, else their character name
+function Engine:PartyDisplayName(name)
+    local unit = self:UnitForName(name)
+    if unit and MonologueRPBridge and MonologueRPBridge.GetRPName then
+        local ok, rp = pcall(MonologueRPBridge.GetRPName, MonologueRPBridge, unit)
+        if ok and type(rp) == "string" and rp ~= "" then return rp end
+    end
+    return name
+end
+
+-- A directed message for <name>, on the channel that reaches them (your group, else your
+-- guild), or nil when no channel does
+function Engine:CommFor(kind, name, unit, tail)
+    if type(name) ~= "string" or name == "" then return nil end
+    unit = unit or self:UnitForName(name)
+    local channel
+    if (unit and (UnitInParty(unit) or UnitInRaid(unit))) or UnitInParty(name) or UnitInRaid(name) then
+        channel = CommChannel()
+    end
+    if not channel and unit and IsInGuild and IsInGuild() then
+        local mine = Clean(GetGuildInfo("player"))
+        if mine and mine == Clean(GetGuildInfo(unit)) then channel = "GUILD" end
+    end
+    if not channel then return nil end
+    local short = (ShortName(name) or name):gsub("%^", "")
+    return { msg = kind .. "^" .. short .. (tail and ("^" .. tail) or ""), channel = channel }
+end
+
+function Engine:SendCommOnSay(comm)
+    if type(comm) ~= "table" or not comm.channel or type(comm.msg) ~= "string" then return end
+    self:QueueAddonMessage(COMM_PREFIX, comm.msg, comm.channel)
+end
+
+-- How you stand with another player: "Friend" (marked with /mono friend), "Cool" (your
+-- cross-race stance toward their race is wary, gruff or disdainful), or nil
+function Engine:RelationTo(name, unit)
+    unit = unit or self:UnitForName(name)
+    if not unit then return nil end
+    if self:GetFriendForUnit(unit) then return "Friend" end
+    local _, race = UnitRace(unit)
+    local cv = self:GetCustomVoice()
+    local stance = cv and type(cv.raceStances) == "table" and cv.raceStances[Clean(race) or ""] or nil
+    if stance and Tune.COOL_STANCES[stance] then return "Cool" end
+    return nil
+end
+
+-- Greeting the same people again and again makes no sense: after greeting someone (or being
+-- greeted by them), no automatic greeting for Tune.GROUP_GREET_GAP, nor while you're grouped
+function Engine:NoteGreeted(name)
+    if type(name) ~= "string" then return end
+    self.State.GroupGreeted = self.State.GroupGreeted or {}
+    self.State.GroupGreeted[NormalizeNameKey(name)] = GetTime()
+end
+
+function Engine:GreetBlocked(unit)
+    local name = ShortName(UnitName(unit))
+    local met = self.State.GroupGreeted
+    if not name or type(met) ~= "table" then return false end
+    local key = NormalizeNameKey(name)
+    local at = met[key]
+    if not at then return false end
+    if UnitInParty(unit) or UnitInRaid(unit) then
+        met[key] = GetTime()   -- still together: keep the gap running from now
+        return true
+    end
+    return GetTime() - at < Tune.GROUP_GREET_GAP
+end
+
+-- Another Monologue user greeted you aloud: greet them back (once; not if you greeted first)
+function Engine:HandleGreetedBy(sender)
+    if not MonologueDB or MonologueDB.partyBanter == false then return end
+    if UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then return end
+    local key, now = NormalizeNameKey(sender), GetTime()
+    local met = self.State.GroupGreeted or {}
+    self.State.GroupGreeted = met
+    local greetedFirst = met[key] and now - met[key] < Tune.GREET_REPLY_COOLDOWN
+    met[key] = now
+    if greetedFirst then return end
+    self.State.GreetReplyAt = self.State.GreetReplyAt or {}
+    if now - (self.State.GreetReplyAt[key] or -math.huge) < Tune.GREET_REPLY_COOLDOWN then return end
+    if math.random() >= Tune.GREET_REPLY_CHANCE then return end
+    local unit = self:UnitForName(sender)
+    if unit then
+        local ok, visible = pcall(UnitIsVisible, unit)
+        if ok and not Clean(visible) then return end
+    end
+    self.State.GreetReplyAt[key] = now
+    self:Debug("greeted by " .. sender .. ": greeting back")
+    C_Timer.After(1.5 + math.random() * 1.5, function()
+        local deckKey, pool = Engine:GreetReplyPool(sender, unit)
+        Engine:SayPartyLine(deckKey, pool, 1, sender, "greeting")
+    end)
+end
+
+-- Half the time your usual greeting for them (friend, guildmate, stance, race), else a reply
+function Engine:GreetReplyPool(sender, unit)
+    if unit and UnitExists(unit) and math.random() < 0.5 then
+        local key, pool = self:PickGreeting(unit)
+        if UsablePool(pool) then return key, pool end
+    end
+    local lines = self.Data.BanterLines or {}
+    local relation = self:RelationTo(sender, unit)
+    local own = relation and type(lines[relation]) == "table" and lines[relation].Greet or nil
+    if UsablePool(own) and math.random() < Tune.BANTER_RELATION_SHARE then
+        return "Banter_" .. relation .. "_Greet", own
+    end
+    return "Banter_GreetBack", lines.GreetBack
+end
+
+-- The pool for answering <sender>'s banter: a friend, a cool stance or someone of your own
+-- class (after a kill) get their own answers some of the time
+function Engine:BanterAnswerPool(topic, sender)
+    local lines = self.Data.BanterLines or {}
+    if math.random() < Tune.BANTER_RELATION_SHARE then
+        local unit = self:UnitForName(sender)
+        local relation = self:RelationTo(sender, unit)
+        local pool = relation and type(lines[relation]) == "table" and lines[relation][topic] or nil
+        if UsablePool(pool) then return "Banter_" .. relation .. "_" .. topic, pool end
+        if unit and topic == "Kill" and UsablePool(lines.SameClass) then
+            local _, mine = UnitClass("player")
+            local _, theirs = UnitClass(unit)
+            if Clean(mine) and Clean(mine) == Clean(theirs) then return "Banter_SameClass", lines.SameClass end
+        end
+    end
+    local own = type(self.ActiveProfile.Moments) == "table" and self.ActiveProfile.Moments["Banter_" .. topic] or nil
+    if UsablePool(own) then return "Moment_Banter_" .. topic, own end
+    return "Banter_" .. topic, lines[topic]
+end
+
+-- Someone answered your line: now and then you have the last word
+function Engine:HandleBanterReply(answerer, topic)
+    if not MonologueDB or MonologueDB.partyBanter == false then return end
+    if UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then return end
+    local now = GetTime()
+    if now - (self.State.BanterCloseAt or -math.huge) < Tune.BANTER_CLOSE_COOLDOWN then return end
+    if math.random() >= Tune.BANTER_CLOSE_CHANCE then return end
+    self.State.BanterCloseAt = now
+    C_Timer.After(2 + math.random() * 1.5, function()
+        local close = Engine.Data.BanterLines and Engine.Data.BanterLines.Close or {}
+        local pool, key = close[topic], "Banter_Close_" .. tostring(topic)
+        if not UsablePool(pool) then pool, key = close.Any, "Banter_Close_Any" end
+        Engine:SayPartyLine(key, pool, 1, answerer)
+    end)
+end
+
+-- You were raised by another player: thank them (they may answer, if they run Monologue)
+function Engine:ThankRezzer()
+    local rez = self.State.RezBy
+    if type(rez) ~= "table" or UnitIsDeadOrGhost("player") then return end
+    self.State.RezBy = nil
+    if not rez.name or GetTime() - rez.at > Tune.REZ_WINDOW then return end
+    if not MonologueDB or MonologueDB.momentLines == false then return end
+    local pool = self.Data.BanterLines and self.Data.BanterLines.Thanks
+    self.State.CommOnSay = self:CommFor("T", rez.name)
+    pcall(self.SayPartyLine, self, "Banter_Thanks", pool, Tune.REZ_THANKS_CHANCE, rez.name)
+    self.State.CommOnSay = nil
+end
+
+function Engine:HandleThanked(sender)
+    if not MonologueDB or MonologueDB.partyBanter == false or UnitAffectingCombat("player") then return end
+    if math.random() >= Tune.THANKS_REPLY_CHANCE then return end
+    C_Timer.After(1.5 + math.random(), function()
+        local pool = Engine.Data.BanterLines and Engine.Data.BanterLines.ThanksReply
+        Engine:SayPartyLine("Banter_ThanksReply", pool, 1, sender)
+    end)
+end
+
+-- A duel is about to start (you challenged, or were challenged): say hello to their
+-- Monologue, and a line of your own on your next key press (dropped if the duel never starts)
+function Engine:DuelStarting(name, unit, kind)
+    local short = type(name) == "string" and ShortName(StripRealm(name) or name) or nil
+    if not short then return end
+    local hello = self:CommFor("D", short, unit, "H")
+    if hello then self:SendCommOnSay(hello) end
+    if not MonologueDB or MonologueDB.momentLines == false or UnitAffectingCombat("player") then return end
+    local pool = self.Data.DuelTalk and self.Data.DuelTalk[kind]
+    self.State.PendingTag = "duelopen"
+    pcall(self.SayPartyLine, self, "DuelTalk_" .. kind, pool, Tune.DUEL_OPEN_CHANCE, short, "duel")
+    self.State.PendingTag = nil
+end
+
+function Engine:HandleDuelComm(sender, phase)
+    local key = NormalizeNameKey(sender)
+    if phase == "H" then
+        self.State.DuelMono = self.State.DuelMono or {}
+        self.State.DuelMono[key] = GetTime()
+    elseif phase == "E" then
+        local wait = self.State.DuelAwait
+        if not wait or wait.key ~= key then return end
+        self.State.DuelAwait = nil
+        C_Timer.After(1.5 + math.random(), function()
+            local pool = Engine.Data.DuelTalk and Engine.Data.DuelTalk.WinReply
+            Engine:SayPartyLine("DuelTalk_WinReply", pool, 1, sender, "duel")
+        end)
+    end
+end
+
+-- After a duel. Against another Monologue user the loser speaks first and the winner answers
+-- (or speaks anyway after Tune.DUEL_REPLY_WAIT seconds); otherwise as before
+function Engine:DuelResultTalk(opponent, won)
+    local key = NormalizeNameKey(ShortName(StripRealm(opponent) or opponent) or opponent)
+    local seen = self.State.DuelMono and self.State.DuelMono[key]
+    if not (seen and GetTime() - seen < Tune.DUEL_MONO_WINDOW) then
+        return self:SpeakDuelLine(opponent, won)
+    end
+    if not won then
+        self.State.CommOnSay = self:CommFor("D", ShortName(StripRealm(opponent) or opponent), nil, "E")
+        pcall(self.SpeakDuelLine, self, opponent, false)
+        self.State.CommOnSay = nil
+        return
+    end
+    local wait = { key = key, at = GetTime() }
+    self.State.DuelAwait = wait
+    C_Timer.After(Tune.DUEL_REPLY_WAIT, function()
+        if Engine.State.DuelAwait == wait then
+            Engine.State.DuelAwait = nil
+            Engine:SpeakDuelLine(opponent, true)
+        end
     end)
 end
 
@@ -6880,7 +7264,8 @@ function Engine:HandleSpellcast(spellID, hardware)
     local deckKey, pool = self:ResolveSpellPool(sigName, sigEntry, targetUnit)
     if not pool or not inCombat then return end
     local isBig = sigEntry.big or sigCategory == "Burst"
-    local midChance = sigCategory and Tune.ABILITY_MID_CHANCE[sigCategory]
+    -- A class pack's own entry may set midChance (crowd control, interrupts, heals)
+    local midChance = tonumber(sigEntry.midChance) or (sigCategory and Tune.ABILITY_MID_CHANCE[sigCategory])
     if not (isBig or midChance or (hostileTarget and not mobTarget)) then return end
     local allowed, why = self:FightLineAllowed(sigName, targetUnit, false)
     if not allowed then
@@ -7140,6 +7525,9 @@ SafeRegisterEvent(frame, "PLAYER_PVP_KILLS_CHANGED")
 SafeRegisterEvent(frame, "CHAT_MSG_COMBAT_HONOR_GAIN")
 -- Duels (tracked separately from Rivals)
 SafeRegisterEvent(frame, "DUEL_REQUESTED")
+SafeRegisterEvent(frame, "RESURRECT_REQUEST")
+SafeRegisterEvent(frame, "PLAYER_UNGHOST")
+SafeRegisterEvent(frame, "PLAYER_ALIVE")
 SafeRegisterEvent(frame, "DUEL_INBOUNDS")
 SafeRegisterEvent(frame, "DUEL_FINISHED")
 SafeRegisterEvent(frame, "CHAT_MSG_SYSTEM")
@@ -7270,6 +7658,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         Engine:BuildActiveProfile(newLevel)
         local recent = Engine:GetRecent()
         recent.levelAt, recent.levelUsed = GetTime(), nil
+        if MonologueDB and IsInGroup and IsInGroup() then pcall(Engine.SendBanterTopic, Engine, "Level") end
 
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
         local restrictionType, restrictionState = ...
@@ -7427,6 +7816,13 @@ frame:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "UPDATE_INVENTORY_DURABILITY" then
         if MonologueDB and MonologueCharDB then Engine:HandleDurability() end
+
+    elseif event == "RESURRECT_REQUEST" then
+        local inviter = ShortName((...))
+        if inviter then Engine.State.RezBy = { name = inviter, at = GetTime() } end
+
+    elseif event == "PLAYER_UNGHOST" or event == "PLAYER_ALIVE" then
+        if MonologueDB and MonologueCharDB then pcall(Engine.ThankRezzer, Engine) end
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         if MonologueDB and MonologueCharDB then Engine:HandleRosterUpdate() end

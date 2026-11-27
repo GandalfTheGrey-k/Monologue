@@ -858,9 +858,20 @@ function UI:CreateLinesPanel()
     l.yells = Box(nil, "Answer NPCs who yell", LEFT + 216, -538, function(self)
         MonologueDB.npcYells = self:GetChecked() and true or false
     end)
-    l.banter = Box(nil, "Party banter (other Monologue users answer you, and you them)", LEFT - 4, -562, function(self)
+    l.banter = Box(nil, "Talk with other Monologue users (banter, greetings back, thanks)", LEFT - 4, -562, function(self)
         MonologueDB.partyBanter = self:GetChecked() and true or false
     end)
+    l.banter:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Talk with other Monologue users", 1, 0.82, 0)
+        GameTooltip:AddLine("When a party member who also runs Monologue says a line (a kill, a meal, the inn, mounting up, loot, a level-up), "
+            .. "one of you may answer, and they may have the last word. Friends, and races you've set a cool stance toward, get their own answers.", 1, 1, 1, true)
+        GameTooltip:AddLine("Also: greeting back when one greets you (party or guild), answering a thank-you after you raise someone, "
+            .. "and duel talk. You won't greet the same group member over and over.", 1, 1, 1, true)
+        GameTooltip:AddLine("Off: you neither answer nor get answered.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    l.banter:SetScript("OnLeave", function() GameTooltip:Hide() end)
     Hint("Battle Cry shouts, Greet says hello (it glows when a line is waiting), Taunt jeers at an enemy "
         .. "player. Right-drag to move. Rather not have buttons? Key Bindings > AddOns > Monologue, or "
         .. "/mono cry, /mono greet, /mono taunt in a macro.", -590)

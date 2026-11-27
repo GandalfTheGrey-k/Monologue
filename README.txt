@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.4.5 (alpha)
+MONOLOGUE  -  version 0.1.5 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
@@ -28,6 +28,18 @@ UPDATING
 3. Download the newest Monologue_v.1.zip:
        https://github.com/GandalfTheGrey-k/Monologue/releases/latest
 4. Extract it into AddOns as in INSTALLING, start the game, and type /mono version.
+
+
+NEW IN 0.1.5
+------------
+- Every class sounds like itself: seven classes rewritten, no lines shared between classes,
+  and signature moves (Polymorph, Fear, Kick, Vanish, Hammer of Justice...) have their own lines.
+- No more characters talking about themselves in the third person.
+- Talking with other Monologue users: greetings back, back-and-forth banter, level-ups, loot,
+  thanks after a resurrection, duel talk, and answers shaped by who they are to you.
+  No more greeting the same group member over and over.
+- Far fewer repeated lines: about 2,400 new lines, smarter line picking, and a memory of
+  your last 40 lines that survives a relog.
 
 
 NEW IN 0.1.4.5
