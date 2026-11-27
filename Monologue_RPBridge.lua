@@ -22,6 +22,8 @@
       {allegiance} Your allegiance / order, or "my own banner"
       {profession} Your profession (chosen or auto-detected), or "my trade"
       {oath} {nemesis} {catchphrase}  Character Anchors (My Voice tab)
+      {companion}  Your companion's name (My Voice tab), or "my companion"
+      {item}       In an item quirk: the item's name
       Live details (/mono tokens shows the current values; built-in lines needing one that
       isn't available right now are skipped):
       {mobtype} {amobtype} {family}  "undead" / "an undead" / "spider"
@@ -360,6 +362,12 @@ function Bridge:ProcessTokens(text, targetUnit)
     text = ReplaceToken(text, "{oath}", function() return Anchor("oath", "to see this through") end)
     text = ReplaceToken(text, "{nemesis}", function() return Anchor("nemesis", "my old enemy") end)
     text = ReplaceToken(text, "{catchphrase}", function() return Anchor("catchphrase", "") end)
+    text = ReplaceToken(text, "{companion}", function() return Anchor("companion", "my companion") end)
+    -- {item}: the item a quirk is about (Abilities tab > Quirks)
+    text = ReplaceToken(text, "{item}", function()
+        local state = MonologueEngine and MonologueEngine.State
+        return (state and type(state.TokenItem) == "string" and state.TokenItem) or "this"
+    end)
 
     -- Dynamic Replacement: {zone}
     text = ReplaceToken(text, "{zone}", function()

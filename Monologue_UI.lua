@@ -439,9 +439,22 @@ function UI:CreatePanel()
     -----------------------------------------------------------------------
     -- Footer: active profile status + close
     -----------------------------------------------------------------------
+    local simpleBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    simpleBtn:SetSize(96, 25)
+    simpleBtn:SetPoint("BOTTOMLEFT", LEFT, 20)
+    simpleBtn:SetText("Simple view")
+    simpleBtn:SetScript("OnClick", function() UI:ShowSimple() end)
+    simpleBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Simple view", 1, 0.82, 0)
+        GameTooltip:AddLine("One page with just the essentials. Nothing you set here is lost: both views change the same settings.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    simpleBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     local status = CreateLabel(f, "", "GameFontDisableSmall")
-    status:SetPoint("BOTTOMLEFT", LEFT, 26)
-    status:SetWidth(PANEL_WIDTH - LEFT * 2 - 280)
+    status:SetPoint("BOTTOMLEFT", LEFT + 104, 26)
+    status:SetWidth(PANEL_WIDTH - LEFT * 2 - 384)
     status:SetWordWrap(true)
     controls.status = status
 
@@ -468,6 +481,7 @@ end
 ---------------------------------------------------------------------------
 
 function UI:Refresh()
+    if self.RefreshSimple then pcall(self.RefreshSimple, self) end
     if not self.Frame or not MonologueDB or not MonologueCharDB then return end
     local controls = self.Controls
 
@@ -546,11 +560,10 @@ end
 function UI:Toggle()
     if not MonologueDB or not MonologueCharDB then return end
     self:CreatePanel()
-    if self:GetShownTab() then
-        for _, tab in ipairs(TAB_ORDER) do
-            local frame = self:GetTabFrame(tab.key)
-            if frame then frame:Hide() end
-        end
+    if self:GetShownTab() or (self.SimpleFrame and self.SimpleFrame:IsShown()) then
+        self:HideAllPanels()
+    elseif self:IsSimpleMenu() then
+        self:ShowSimple()
     else
         self.Frame:Show()
     end
@@ -558,7 +571,7 @@ end
 
 function UI:Open()
     if not MonologueDB or not MonologueCharDB then return end
-    self:ShowTab("settings")
+    if self:IsSimpleMenu() then self:ShowSimple() else self:ShowTab("settings") end
 end
 
 function UI:ShowTab(key)
@@ -1223,12 +1236,13 @@ function UI:CreateVoicePanel()
         function(value) SetIdentity("trait2", value) end)
     v.builderNote = Note("")
 
-    -- Character Anchors: free text, used as {oath} {nemesis} {catchphrase} and in their own lines
+    -- Character Anchors: free text, used as {oath} {nemesis} {catchphrase} {companion} and in their own lines
     v.anchors = {}
     for _, spec in ipairs({
         { field = "oath", label = "Oath:", hint = "finish \"I swore ...\" e.g. to see Gnomeregan free" },
         { field = "nemesis", label = "Nemesis:", hint = "a name, e.g. Mor'Ladim or the Defias" },
         { field = "catchphrase", label = "Catchphrase:", hint = "a full sentence you always say" },
+        { field = "companion", label = "Companion:", hint = "a pet or animal friend, e.g. Haggis, or just 'the bird'" },
     }) do
         local anchor = { field = spec.field }
         anchor.label = CreateLabel(content, spec.label)
@@ -1804,9 +1818,78 @@ local function GetPoolLineRow(a, index)
     return row
 end
 
+-- Quirks (Abilities tab): labels for the trigger, condition and chance choices
+local QUIRK_TRIGGERS = {
+    { value = "ITEM", text = "I equip or loot an item", short = "I equip or loot",
+      hint = "a word in the item: shield, staff, green, epic, or part of a name. Blank = any item." },
+    { value = "PLACE", text = "I enter a place", short = "I enter",
+      hint = "a zone or subzone: Duskwood, Goldshire, The Deadmines. Blank = anywhere new." },
+    { value = "TARGET", text = "I target someone or something", short = "I target",
+      hint = "a name, creature type or family, race or class: Hogger, spider, murloc, undead, orc." },
+    { value = "CHAT", text = "someone near me says a word", short = "someone says",
+      hint = "a whole word said in /say, /yell or your group, e.g. beard. Needed for this one." },
+}
+local QUIRK_CHANCES = {
+    { value = 100, text = "Every time" }, { value = 60, text = "Often" },
+    { value = 30, text = "Sometimes" }, { value = 10, text = "Rarely" },
+}
+local QUIRK_CONDITIONS = {
+    ALWAYS = "", COMBAT = "in combat", PEACE = "out of combat", DUNGEON = "in a dungeon or raid",
+    RESTING = "at an inn or in a city",
+}
+
+local function QuirkConditionLabel(cond)
+    if QUIRK_CONDITIONS[cond] then return QUIRK_CONDITIONS[cond] end
+    local kind, value = tostring(cond):match("^(%u+):(%a+)$")
+    local data = value and MonologueEngine.Data.Professions[value]
+    local name = data and data.name or value or "?"
+    if kind == "HAS" then return "as a " .. name:lower() end
+    if kind == "NOT" then return "when not a " .. name:lower() end
+    if kind == "MOOD" then return "when " .. tostring(value):lower() end
+    return tostring(cond)
+end
+
+local function QuirkConditionGroups()
+    local engine = MonologueEngine
+    local groups = {
+        { value = "ALWAYS", text = "Always" }, { value = "COMBAT", text = "In combat" },
+        { value = "PEACE", text = "Out of combat" }, { value = "DUNGEON", text = "In a dungeon or raid" },
+        { value = "RESTING", text = "At an inn or in a city" },
+    }
+    local has, without = {}, {}
+    for _, key in ipairs(engine.Data.ProfessionOrder or {}) do
+        local data = engine.Data.Professions[key]
+        if data then
+            has[#has + 1] = { value = "HAS:" .. key, text = data.name }
+            without[#without + 1] = { value = "NOT:" .. key, text = data.name }
+        end
+    end
+    groups[#groups + 1] = { text = "My profession is...", options = has }
+    groups[#groups + 1] = { text = "My profession isn't...", options = without }
+    local moods = {}
+    for _, mood in ipairs({ "Grim", "Weary", "Cheerful", "Fierce" }) do moods[#moods + 1] = { value = "MOOD:" .. mood, text = mood } end
+    groups[#groups + 1] = { text = "My mood is...", options = moods }
+    return groups
+end
+
+local function GetQuirkRow(a, index)
+    local row = a.quirkRows[index]
+    if row then return row end
+    row = CreateFrame("Frame", nil, a.content)
+    row:SetSize(VOICE_CONTENT_WIDTH - 8, 20)
+    row.text = CreateLabel(row, "", "GameFontHighlightSmall")
+    row.text:SetPoint("LEFT", 2, 0)
+    row.text:SetWidth(VOICE_CONTENT_WIDTH - 50)
+    row.text:SetWordWrap(false)
+    row.remove = CreateButton(row, "x", 22, nil)
+    row.remove:SetPoint("RIGHT", -2, 0)
+    a.quirkRows[index] = row
+    return row
+end
+
 function UI:CreateAbilitiesPanel()
     if self.AbilitiesFrame then return end
-    local a = { spellRows = {}, lineRows = {} }
+    local a = { spellRows = {}, lineRows = {}, quirkRows = {}, quirkTrigger = "ITEM", quirkCond = "ALWAYS", quirkChance = 60 }
     self.Abilities = a
     local engine = MonologueEngine
     local f = CreateTabPanel("MonologueAbilitiesFrame", "abilities")
@@ -1884,6 +1967,41 @@ function UI:CreateAbilitiesPanel()
     a.lineInput:SetScript("OnEnterPressed", AddPoolLine)
     a.noLines = Note("|cff888888None of your own yet for this one.|r")
 
+    -- Quirks: your own "when this happens, say one of these" rules
+    a.hQuirks = Header("Quirks")
+    a.quirkHint = Note("|cff888888Little habits of your character: when something happens, say one of your lines. "
+        .. "Pick what sets it off and what to look for, then add lines; lines with the same choices go into the same "
+        .. "quirk. {target} is your target or whoever spoke, {item} the item. Saved for this character and included "
+        .. "in Export on My Voice.|r")
+    a.quirkWhenLabel = CreateLabel(content, "When")
+    a.quirkTriggerDD = CreateDropdown(content, 230, QUIRK_TRIGGERS,
+        function() return a.quirkTrigger end,
+        function(value) a.quirkTrigger = value; UI:OnAbilitiesChanged() end)
+    a.quirkMatchLabel = CreateLabel(content, "Matching")
+    a.quirkMatch = CreateInput(content, 200, 40)
+    a.quirkMatchHint = Note("")
+    a.quirkIfLabel = CreateLabel(content, "Only if")
+    a.quirkCondDD = CreateGroupedDropdown(content, 230, QuirkConditionGroups,
+        function() return a.quirkCond end,
+        function(value) a.quirkCond = value end)
+    a.quirkOftenLabel = CreateLabel(content, "How often")
+    a.quirkChanceDD = CreateDropdown(content, 150, QUIRK_CHANCES,
+        function() return a.quirkChance end,
+        function(value) a.quirkChance = value end)
+    a.quirkLine = CreateInput(content, 290)
+    local function AddQuirkLine()
+        local ok, message = engine:QuirkAddLine(a.quirkTrigger, a.quirkMatch:GetText(), a.quirkCond, a.quirkChance, a.quirkLine:GetText())
+        if ok then
+            a.quirkLine:SetText("")
+        elseif message then
+            engine.Print("|cffff8800" .. message .. "|r")
+        end
+        UI:OnAbilitiesChanged()
+    end
+    a.addQuirk = CreateButton(content, "Add Line", 80, AddQuirkLine)
+    a.quirkLine:SetScript("OnEnterPressed", AddQuirkLine)
+    a.noQuirks = Note("|cff888888No quirks yet. Example: When I target |cff00ccffspider|r, say \"Nope. Nope. Not again.\"|r")
+
     f:SetScript("OnShow", function() UI:LayoutAbilities() end)
     f:Hide()
     self.AbilitiesFrame = f
@@ -1956,6 +2074,64 @@ function UI:LayoutAbilities()
             row:Show()
             y = y + 22
         end
+    end
+
+    -- Quirks
+    y = y + 8
+    at(a.hQuirks, 0); y = y + 22
+    noteAt(a.quirkHint)
+    at(a.quirkWhenLabel, 4, 6); at(a.quirkTriggerDD, 80, 0); a.quirkTriggerDD:GenerateMenu(); y = y + 30
+    at(a.quirkMatchLabel, 4, 6); at(a.quirkMatch, 86, 0); y = y + 26
+    local hint = ""
+    for _, option in ipairs(QUIRK_TRIGGERS) do
+        if option.value == a.quirkTrigger then hint = option.hint end
+    end
+    a.quirkMatchHint:SetText("|cff888888" .. hint .. "|r")
+    at(a.quirkMatchHint, 86); a.quirkMatchHint:Show()
+    y = y + math.max(14, a.quirkMatchHint:GetStringHeight()) + 6
+    at(a.quirkIfLabel, 4, 6); at(a.quirkCondDD, 80, 0); a.quirkCondDD:GenerateMenu(); y = y + 30
+    at(a.quirkOftenLabel, 4, 6); at(a.quirkChanceDD, 80, 0); a.quirkChanceDD:GenerateMenu(); y = y + 30
+    at(a.quirkLine, 10)
+    a.addQuirk:ClearAllPoints()
+    a.addQuirk:SetPoint("LEFT", a.quirkLine, "RIGHT", 6, 0)
+    y = y + 30
+    for _, row in ipairs(a.quirkRows) do row:Hide() end
+    a.noQuirks:Hide()
+    local cv = engine:GetCustomVoice()
+    local quirks = cv and cv.quirks or {}
+    if #quirks == 0 then noteAt(a.noQuirks) end
+    local used = 0
+    for qi, quirk in ipairs(quirks) do
+        local short = quirk.trigger
+        for _, option in ipairs(QUIRK_TRIGGERS) do
+            if option.value == quirk.trigger then short = option.short end
+        end
+        local chance = ""
+        for _, option in ipairs(QUIRK_CHANCES) do
+            if option.value == quirk.chance then chance = option.text:lower() end
+        end
+        local cond = QuirkConditionLabel(quirk.cond)
+        used = used + 1
+        local head = GetQuirkRow(a, used)
+        head:ClearAllPoints()
+        head:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -y)
+        head.text:SetText(string.format("|cffffd100When %s|r %s%s |cff888888(%s)|r", short,
+            quirk.match ~= "" and ("|cff00ccff" .. quirk.match .. "|r") or "|cff888888anything|r",
+            cond ~= "" and (", " .. cond) or "", chance))
+        head.remove:SetScript("OnClick", function() engine:QuirkRemove(qi); UI:OnAbilitiesChanged() end)
+        head:Show()
+        y = y + 22
+        for li, line in ipairs(quirk.lines) do
+            used = used + 1
+            local row = GetQuirkRow(a, used)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", content, "TOPLEFT", 18, -y)
+            row.text:SetText(line)
+            row.remove:SetScript("OnClick", function() engine:QuirkRemove(qi, li); UI:OnAbilitiesChanged() end)
+            row:Show()
+            y = y + 20
+        end
+        y = y + 4
     end
     content:SetHeight(y + 20)
 end
@@ -3083,26 +3259,316 @@ end
 function UI:ShowWelcome()
     if MonologueCharDB then MonologueCharDB.welcomed = true end
     if not self.WelcomeFrame then
-        local f = CreateModal("MonologueWelcomeFrame", 420, 270, "Welcome to Monologue")
+        local f = CreateModal("MonologueWelcomeFrame", 420, 250, "Welcome to Monologue")
         local body = CreateLabel(f, "", "GameFontHighlight")
         body:SetPoint("TOPLEFT", LEFT, -52)
         body:SetWidth(376)
         body:SetJustifyH("LEFT")
         body:SetJustifyV("TOP")
         body:SetWordWrap(true)
-        body:SetText("Your character now talks on their own: pull lines, greetings, rivals, world reactions and more, said in /s when you press an ability.\n\n"
-            .. "|cffffd100/mono|r  opens the settings and the |cffffd100My Voice|r studio (clan, hometown, traits, your own lines).\n"
-            .. "|cffffd100/mono bug|r  makes a bug report to paste in Discord.\n\n"
-            .. "|cff888888Alpha build " .. tostring(MonologueEngine.VERSION) .. ". Thanks for testing!|r")
-        local open = CreateButton(f, "Open My Voice", 110, function()
+        body:SetText("Your character can now talk on their own: a line now and then as you fight, greet friends, "
+            .. "spot rivals or sit down to eat, in your race's accent.\n\n"
+            .. "Want to give them a personality first? It takes a minute, and you can change it any time with |cffffd100/mono|r.\n\n"
+            .. "|cff888888Alpha build " .. tostring(MonologueEngine.VERSION) .. ". /mono bug makes a bug report for Discord. Thanks for testing!|r")
+        local open = CreateButton(f, "Set Up My Character", 150, function()
             f:Hide()
-            UI:OpenVoice()
+            UI:Open()
         end)
         open:SetPoint("BOTTOMLEFT", LEFT, 20)
-        local done = CreateButton(f, "Got it", 80, function() f:Hide() end)
+        self.WelcomeOpen = open
+        local done = CreateButton(f, "Later", 80, function() f:Hide() end)
+        if MonologueDB then MonologueDB.simpleIntroShown = true end
         done:SetPoint("BOTTOMRIGHT", -20, 20)
         self.WelcomeFrame = f
     end
     self.WelcomeFrame:Show()
     self.WelcomeFrame:Raise()
+end
+
+---------------------------------------------------------------------------
+-- Simple view: one page with the essentials, the default for new players
+-- (MonologueDB.menuMode = "SIMPLE"; players from before it start on "FULL"). Nothing here
+-- is a separate setting: every control writes the same values the full tabs do, so the
+-- two views always agree. "Show all options" switches to the full tabs.
+---------------------------------------------------------------------------
+
+local SIMPLE_HEIGHT = 610
+-- "How chatty?" sets the three pacing sliders together; NORMAL is the defaults
+local CHATTY_PRESETS = {
+    QUIET = { pullEvery = 6, chattiness = 0.5, situationChance = 30 },
+    NORMAL = { pullEvery = 3, chattiness = 1.0, situationChance = 40 },
+    CHATTY = { pullEvery = 2, chattiness = 1.5, situationChance = 50 },
+}
+
+local function CurrentChatty()
+    for key, preset in pairs(CHATTY_PRESETS) do
+        if MonologueDB.pullEvery == preset.pullEvery and MonologueDB.chattiness == preset.chattiness
+            and MonologueDB.situationChance == preset.situationChance then
+            return key
+        end
+    end
+    return "CUSTOM"
+end
+
+function UI:IsSimpleMenu()
+    return MonologueDB ~= nil and MonologueDB.menuMode == "SIMPLE"
+end
+
+function UI:HideAllPanels()
+    for _, tab in ipairs(TAB_ORDER) do
+        local frame = self:GetTabFrame(tab.key)
+        if frame then frame:Hide() end
+    end
+    if self.SimpleFrame then self.SimpleFrame:Hide() end
+end
+
+-- Opens the simple page (and remembers it as the menu to open)
+function UI:ShowSimple()
+    if not MonologueDB or not MonologueCharDB then return end
+    MonologueDB.menuMode = "SIMPLE"
+    self:CreateSimplePanel()
+    local from = self:GetShownTab()
+    if from then
+        local point, _, relPoint, x, y = from:GetPoint(1)
+        if point then
+            self.SimpleFrame:ClearAllPoints()
+            self.SimpleFrame:SetPoint(point, UIParent, relPoint, x, y)
+        end
+    end
+    self:HideAllPanels()
+    self.SimpleFrame:Show()
+    self.SimpleFrame:Raise()
+end
+
+-- Opens the full tabs (and remembers them as the menu to open)
+function UI:ShowFull(key)
+    if not MonologueDB or not MonologueCharDB then return end
+    MonologueDB.menuMode = "FULL"
+    if self.SimpleFrame then self.SimpleFrame:Hide() end
+    self:ShowTab(key or "settings")
+end
+
+function UI:CreateSimplePanel()
+    if self.SimpleFrame then return end
+    local engine = MonologueEngine
+    local s = {}
+    self.Simple = s
+
+    local f = CreateFrame("Frame", "MonologueSimpleFrame", UIParent, "BackdropTemplate")
+    f:SetSize(PANEL_WIDTH, SIMPLE_HEIGHT)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:SetToplevel(true)
+    f:SetClampedToScreen(true)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 }
+    })
+    SolidBackground(f)
+    tinsert(UISpecialFrames, "MonologueSimpleFrame")
+    local title = CreateLabel(f, "Monologue", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", LEFT, -20)
+    local subtitle = CreateLabel(f, "|cff888888Your character's voice. The essentials; everything else is under Show all options.|r", "GameFontHighlightSmall")
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    local closeX = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    closeX:SetPoint("TOPRIGHT", -6, -6)
+
+    s.enabled = CreateCheckbox(f, "Monologue is on", -64,
+        function() return MonologueDB.enabled end,
+        function(value) MonologueDB.enabled = value end)
+    s.ic = CreateCheckbox(f, "In character", -64,
+        function() return not MonologueDB.outOfCharacter end,
+        function(value) engine:SetInCharacter(value) end)
+    s.ic:ClearAllPoints()
+    s.ic:SetPoint("TOPLEFT", LEFT + 216, -64)
+
+    local function CV() return engine:GetCustomVoice() or {} end
+
+    CreateSectionHeader(f, "Who You Are", -100)
+    s.persona = CreateDropdown(f, DROPDOWN_WIDTH, VoicePersonaOptions,
+        function() return CV().persona or VOICE_FOLLOW_ARC end,
+        function(value) engine:CustomVoiceSetPersona(value) end)
+    CreateRow(f, "Personality:", -118, s.persona)
+    s.temper = CreateDropdown(f, DROPDOWN_WIDTH,
+        function()
+            local options = {}
+            for _, option in ipairs(engine:GetRacePresetOptions()) do
+                options[#options + 1] = { value = option.key, text = option.name }
+            end
+            return options
+        end,
+        function()
+            local key = CV().racePreset
+            for _, option in ipairs(engine:GetRacePresetOptions()) do
+                if option.key == key then return key end
+            end
+            return "Default"
+        end,
+        function(value) engine:CustomVoiceSetRacePreset(value) end)
+    CreateRow(f, "Temperament:", -150, s.temper)
+    s.accent = CreateDropdown(f, DROPDOWN_WIDTH, INTENSITY_OPTIONS,
+        function() return MonologueDB.translationIntensity end,
+        function(value) MonologueDB.translationIntensity = value end)
+    CreateRow(f, "Accent strength:", -182, s.accent)
+    s.mood = CreateDropdown(f, DROPDOWN_WIDTH, {
+            { value = "NORMAL", text = "Normal" }, { value = "Grim", text = "Grim" },
+            { value = "Weary", text = "Weary" }, { value = "Cheerful", text = "Cheerful" },
+            { value = "Fierce", text = "Fierce" },
+        },
+        function() return engine:GetMood() or "NORMAL" end,
+        function(value) engine:SetMood(value ~= "NORMAL" and value or nil) end)
+    CreateRow(f, "Mood today:", -214, s.mood)
+    s.companion = CreateInput(f, 160, 80)
+    CreateRow(f, "Companion:", -246, s.companion)
+    local function SetCompanion()
+        local ok, message = engine:CustomVoiceSetIdentity("companion", s.companion:GetText())
+        if not ok and message then engine.Print("|cffff8800" .. message .. "|r") end
+        s.companion:ClearFocus()
+    end
+    s.companionSet = CreateButton(f, "Set", 50, SetCompanion)
+    s.companionSet:SetPoint("LEFT", s.companion, "RIGHT", 6, 0)
+    s.companion:SetScript("OnEnterPressed", SetCompanion)
+    local companionHint = CreateLabel(f, "|cff888888a pet's name, or 'the bird'|r", "GameFontHighlightSmall")
+    companionHint:SetPoint("LEFT", s.companionSet, "RIGHT", 8, 0)
+
+    CreateSectionHeader(f, "How You Talk", -286)
+    s.chatty = CreateDropdown(f, DROPDOWN_WIDTH, function()
+            local options = {
+                { value = "QUIET", text = "Quiet (a line every few fights)" },
+                { value = "NORMAL", text = "Normal" },
+                { value = "CHATTY", text = "Chatty" },
+            }
+            if CurrentChatty() == "CUSTOM" then options[#options + 1] = { value = "CUSTOM", text = "Custom (set in all options)" } end
+            return options
+        end,
+        CurrentChatty,
+        function(value)
+            local preset = CHATTY_PRESETS[value]
+            if not preset then return end
+            for key, v in pairs(preset) do MonologueDB[key] = v end
+            if engine.ResetPullPacing then pcall(engine.ResetPullPacing, engine) end
+        end)
+    CreateRow(f, "How chatty?", -304, s.chatty)
+    s.route = CreateDropdown(f, DROPDOWN_WIDTH, {
+            { value = "LOUD", text = "Out loud, in /say" },
+            { value = "LOCAL", text = "Only in my own chat window" },
+        },
+        function() return MonologueDB.strictSafeMode and "LOCAL" or "LOUD" end,
+        function(value)
+            MonologueDB.strictSafeMode = value == "LOCAL"
+            if value == "LOUD" then MonologueDB.backgroundSpeech = "QUEUE" end
+        end)
+    CreateRow(f, "Lines go:", -336, s.route)
+    s.taunts = CreateDropdown(f, DROPDOWN_WIDTH, {
+            { value = "OFF", text = "Off" }, { value = "CIVIL", text = "Civil (an honest rivalry)" },
+            { value = "ROUGH", text = "Rough (trash talk)" }, { value = "SAVAGE", text = "Savage (race nicknames)" },
+        },
+        function() return CV().taunts or "OFF" end,
+        function(value) engine:CustomVoiceSetIdentity("taunts", value) end)
+    CreateRow(f, "Taunt the other faction:", -368, s.taunts)
+    local buttonsLabel = CreateLabel(f, "On-screen buttons:")
+    buttonsLabel:SetPoint("TOPLEFT", LEFT, -406)
+    s.cry = CreateCheckbox(f, "Battle Cry", -400,
+        function() return MonologueDB.buttonShown end,
+        function(value) UI:SetCryButtonShown(value) end)
+    s.greet = CreateCheckbox(f, "Greet", -400,
+        function() return MonologueDB.greetButtonShown end,
+        function(value) UI:SetGreetButtonShown(value) end)
+    s.taunt = CreateCheckbox(f, "Taunt", -400,
+        function() return MonologueDB.tauntButtonShown end,
+        function(value) UI:SetTauntButtonShown(value) end)
+    for i, cb in ipairs({ s.cry, s.greet, s.taunt }) do
+        cb:ClearAllPoints()
+        cb:SetPoint("TOPLEFT", CONTROL_X - 4 + (i - 1) * 104, -400)
+    end
+
+    CreateSectionHeader(f, "Try Your Accent", -442)
+    s.test = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    s.test:SetSize(300, 28)
+    s.test:SetPoint("TOPLEFT", LEFT + 6, -460)
+    s.test:SetAutoFocus(false)
+    s.test:SetMaxLetters(255)
+    s.test:SetText("Hello friend, do you want a beer?")
+    s.test:SetScript("OnEscapePressed", s.test.ClearFocus)
+    s.out = CreateLabel(f, "|cff888888Type a line and press Translate.|r", "GameFontHighlightSmall")
+    s.out:SetPoint("TOPLEFT", LEFT, -494)
+    s.out:SetWidth(PANEL_WIDTH - LEFT * 2)
+    s.out:SetHeight(36)
+    s.out:SetJustifyV("TOP")
+    s.out:SetWordWrap(true)
+    local function RunTest()
+        local text = s.test:GetText() or ""
+        if text == "" then return end
+        local intensity = MonologueDB.translationIntensity
+        local translated = MonologueTranslator:Translate(text, intensity)
+        local note = intensity <= 0 and "  |cffff8800(accent is Off)|r" or ""
+        s.out:SetText("|cff00ff00Comes out as:|r " .. tostring(translated) .. note)
+        s.test:ClearFocus()
+    end
+    local testBtn = CreateButton(f, "Translate", 100, RunTest)
+    testBtn:SetPoint("LEFT", s.test, "RIGHT", 10, 0)
+    s.test:SetScript("OnEnterPressed", RunTest)
+
+    local more = CreateLabel(f, "|cff888888Where you speak, chat channels, your own lines, word swaps, clan and hometown, "
+        .. "quirks, rivals and more are under Show all options.|r", "GameFontHighlightSmall")
+    more:SetPoint("BOTTOMLEFT", LEFT, 52)
+    more:SetWidth(PANEL_WIDTH - LEFT * 2)
+    more:SetWordWrap(true)
+    local all = CreateButton(f, "Show all options...", 150, function() UI:ShowFull("settings") end)
+    all:SetPoint("BOTTOMLEFT", LEFT, 20)
+    local close = CreateButton(f, "Close", 100, function() f:Hide() end)
+    close:SetPoint("BOTTOMRIGHT", -20, 20)
+
+    f:SetScript("OnShow", function() UI:RefreshSimple() end)
+    f:Hide()
+    self.SimpleFrame = f
+end
+
+function UI:RefreshSimple()
+    local s = self.Simple
+    if not s or not self.SimpleFrame or not self.SimpleFrame:IsShown() or not MonologueDB then return end
+    for _, cb in ipairs({ s.enabled, s.ic, s.cry, s.greet, s.taunt }) do cb:Refresh() end
+    for _, dd in ipairs({ s.persona, s.temper, s.accent, s.mood, s.chatty, s.route, s.taunts }) do dd:Refresh() end
+    if not s.companion:HasFocus() then
+        local cv = MonologueEngine:GetCustomVoice()
+        s.companion:SetText(cv and cv.companion or "")
+    end
+end
+
+-- For players from before the simple menu (once per account): try it, and say what you think
+function UI:ShowSimpleIntro()
+    if not MonologueDB then return end
+    MonologueDB.simpleIntroShown = true
+    if not self.SimpleIntroFrame then
+        local f = CreateModal("MonologueSimpleIntroFrame", 420, 250, "New: a simpler menu")
+        local body = CreateLabel(f, "", "GameFontHighlight")
+        body:SetPoint("TOPLEFT", LEFT, -52)
+        body:SetWidth(376)
+        body:SetJustifyH("LEFT")
+        body:SetJustifyV("TOP")
+        body:SetWordWrap(true)
+        body:SetText("Monologue now has a |cffffd100simple view|r: one page with just the essentials (who you are, "
+            .. "how chatty, out loud or only in your chat, and a box to try your accent).\n\n"
+            .. "Your settings are untouched, and |cffffd100Show all options|r brings back the full menu any time.\n\n"
+            .. "|cff888888Would you give it a look and tell us in Discord what you think? Thanks!|r")
+        local try = CreateButton(f, "Try the Simple View", 150, function()
+            f:Hide()
+            UI:ShowSimple()
+        end)
+        try:SetPoint("BOTTOMLEFT", LEFT, 20)
+        self.SimpleIntroTry = try
+        local keep = CreateButton(f, "Keep Full Menu", 120, function() f:Hide() end)
+        keep:SetPoint("BOTTOMRIGHT", -20, 20)
+        self.SimpleIntroKeep = keep
+        self.SimpleIntroFrame = f
+    end
+    self.SimpleIntroFrame:Show()
+    self.SimpleIntroFrame:Raise()
 end

@@ -301,3 +301,22 @@ Data.AnchorLines = {
         Idle = { "{catchphrase}" },
     },
 }
+
+---------------------------------------------------------------------------
+-- Companion (My Voice: a pet or animal friend; only used when one is set). {companion} is
+-- its name. Species-neutral, so it fits a cat, a macaw or a wolf. A profile can bring its
+-- own with CompanionLines = { Combat = {...}, ... } (see profiles/CarlNage/_Companion.lua).
+---------------------------------------------------------------------------
+
+Data.AnchorLines.Companion = {
+    Combat = { "Close to me, {companion}.", "Keep back, {companion}. This one's mine.", "Cover me, {companion}.",
+        "Not you, {companion}. Stay put.", "Ready, {companion}?", "Easy, {companion}. Let me go first." },
+    LowHP = { "Get clear, {companion}.", "I'm fine, {companion}. Mostly.", "Don't fuss, {companion}.",
+        "Stay out of reach, {companion}.", "Not done yet, {companion}.", "Keep your head down, {companion}." },
+    Kill = { "That's that, {companion}.", "Good work, {companion}. Well. My work.", "All clear, {companion}.",
+        "See, {companion}? Nothing to it.", "You can come out now, {companion}.", "{companion}, that's not food." },
+    Idle = { "What do you think, {companion}?", "Don't wander off, {companion}.", "You and me, {companion}. Same as always.",
+        "{companion}, stop chewing that.", "Long road, {companion}. Nearly there.", "You've been good today, {companion}. Mostly." },
+    Loot = { "Don't touch that, {companion}.", "Not for you, {companion}.", "Want a look, {companion}? Careful.",
+        "Shiny, isn't it, {companion}?", "We'll split it, {companion}. Ninety, ten.", "You found it first, didn't you, {companion}?" },
+}

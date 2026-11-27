@@ -9,6 +9,7 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 ---
 
 ## Contents
+- [What's new in 0.1.5.1](#whats-new-in-0151)
 - [What's new in 0.1.5](#whats-new-in-015)
 - [What's new in 0.1.4.5](#whats-new-in-0145)
 - [What's new in 0.1.4.1](#whats-new-in-0141)
@@ -27,6 +28,14 @@ A roleplay voice addon for **WoW Forever**. Your character talks on their own: a
 - [FAQ & troubleshooting](#faq--troubleshooting)
 
 ---
+
+## What's new in 0.1.5.1
+
+- **A simple view.** `/mono` now opens one page with just the essentials: personality, temperament, accent, mood, companion, how chatty, out loud or only in your own chat, taunts, the on-screen buttons and a box to try your accent. **Show all options...** opens the full menu, and **Simple view** on the General tab comes back. Both views change the same settings. New players start on the simple view; if you played before, you keep the full menu (a one-time card at login invites you to try the simple one).
+- **Quirks** (Abilities tab): your character's own little habits. *When I equip or loot a* **shield**, *enter* **Duskwood**, *target a* **spider**, *or someone says* **beard**, *say one of my lines.* Optional conditions (in or out of combat, in a dungeon, at an inn, a profession, a mood) and how often. Saved per character and shared through **Export**. `/mono quirks` lists them.
+- **Companion** (My Voice): type your pet's name (or just "the bird") and your character talks to it now and then after kills, over loot, while idle and when hurt. Handy because companions can't be renamed in game. `{companion}` works in your own lines too.
+- **Profiles can have quirks too**, e.g. a line whenever a new shield is picked up, only for a given profession.
+- The welcome card now asks before opening anything.
 
 ## What's new in 0.1.5
 
@@ -136,7 +145,9 @@ If a group or guild member runs a newer version, Monologue tells you once in cha
 
 ## The /mono window
 
-`/mono` opens a window with four tabs (**General**, **Voice Lines**, **My Voice**, **Abilities**) and a **Report Bug** button in the header.
+**New to Monologue?** `/mono` opens the **simple view**: one page with just the essentials. It covers who you are (personality, temperament, accent, mood, companion), how you talk (how chatty, out loud or only in your own chat, taunts, the on-screen buttons) and a box to try your accent. **Show all options...** opens the full menu below, and **Simple view** (bottom of the General tab) brings you back. Both views change the same settings, so switching never loses anything. If you played before the simple view existed, you start on the full menu. `/mono simple` and `/mono full` switch from chat.
+
+The full menu has four tabs (**General**, **Voice Lines**, **My Voice**, **Abilities**) and a **Report Bug** button in the header.
 
 ### General tab
 
@@ -204,6 +215,7 @@ Everything here is saved **per character** and sits on top of your race and clas
   - **Oath:** finish "I swore …". Used as `{oath}`.
   - **Nemesis:** a name. Used as `{nemesis}`.
   - **Catchphrase:** a sentence you always say. Used as `{catchphrase}`.
+  - **Companion:** a pet or animal friend's name (or just "the bird"). Used as `{companion}`, and your character talks to it now and then after kills, while idle, over loot and when hurt. Handy because companions can't be renamed in game.
   - Your hometown works the same way as `{hometown}`.
 - **Dialect Strength:** **Full Dialect** (your General-tab accent), **Light Flavor** (key word swaps and the odd oath, no respelling), **Clean** (plain spelling; your clan, allegiance and traits still shape *what* you say).
 
@@ -247,6 +259,18 @@ Next to each spell, **Every cast / 2nd / 3rd / 5th / 10th** lets a spell you use
 **Pacing**
 **Quiet in dungeons**: automatic lines a quarter as often in dungeons, and none in raids.
 
+**Quirks**
+Your character's own little habits: *when something happens, say one of your lines.* Pick:
+
+| Choice | Options |
+|---|---|
+| **When** | I equip or loot an item · I enter a place · I target someone or something · someone near me says a word |
+| **Matching** | Text to look for: an item's name, type or quality (*shield*, *staff*, *epic*); a zone or subzone (*Duskwood*); a target's name, type, race or class (*Hogger*, *spider*, *undead*); a whole word in /say, /yell or group chat (*beard*). Blank matches anything, except for chat. |
+| **Only if** | Always · in combat · out of combat · in a dungeon or raid · at an inn or in a city · my profession is (or isn't) … · my mood is … |
+| **How often** | Every time · often · sometimes · rarely |
+
+Then type a line and **Add Line**; more lines with the same choices join the same quirk. `{target}` is your target or whoever spoke, `{item}` the item. Examples: *When I target **spider**, say "Nope. Nope. Not again."* · *When I enter **Duskwood**, say "I hate this forest."* · *When someone says **beard**, say "Leave the beard out of this, {target}."* Each quirk has a cooldown, nothing fires at login, and your own messages never set off a chat quirk. Saved per character and included in **Export**. `/mono quirks` lists them.
+
 **My Lines for a Spell or Moment**
 Pick a spell you've cast, an everyday moment (Mining, Merchant, Pet Summon...) or a kind of move, and add your own lines. They join the lines Monologue already has; a spell with none gets yours alone. Tokens like `{target}` and `{zone}` work, and **Export** on My Voice includes them.
 
@@ -273,6 +297,7 @@ All commands start with `/mono` (`/mono help` lists them in game).
 |---|---|
 | `/mono` | Open the settings window |
 | `/mono lines` · `/mono voice` · `/mono abilities` | Open the Voice Lines, My Voice or Abilities tab |
+| `/mono quirks` | List your quirks (and open the Abilities tab) |
 | `/mono roster` | Open Rivals & Friends |
 | `/mono toggle` | Turn Monologue on or off |
 | `/mono safemode` | Strict Safe-Mode on/off |

@@ -297,7 +297,7 @@ end
 -- /mono bug report.
 ---------------------------------------------------------------------------
 
-Engine.VERSION = "0.1.5"
+Engine.VERSION = "0.1.5.1"
 Tune.DIAG_MAX = 20
 Tune.MAX_ERRORS = 3
 Engine.DiagnosticLog = {}
@@ -590,7 +590,13 @@ end
 ---------------------------------------------------------------------------
 
 function Engine:InitializeDB()
+    -- A first-time player (no saved settings yet) starts on the simple menu; everyone who has
+    -- played before keeps the full tabs they know
+    local firstTime = type(MonologueDB) ~= "table" or next(MonologueDB) == nil
     if type(MonologueDB) ~= "table" then MonologueDB = {} end
+    if MonologueDB.menuMode ~= "SIMPLE" and MonologueDB.menuMode ~= "FULL" then
+        MonologueDB.menuMode = firstTime and "SIMPLE" or "FULL"
+    end
     if type(MonologueCharDB) ~= "table" then MonologueCharDB = {} end
 
     -- Progression data saved account-wide by earlier builds moves to the first
@@ -1055,7 +1061,7 @@ end
 -- Azeroth Identity fields (My Voice tab): clan key, custom clan name, hometown, allegiance key,
 -- profession key (nil = auto-detect)
 local CV_IDENTITY_FIELDS = { "clan", "clanName", "hometown", "allegiance", "profession",
-    "upbringing", "trait", "trait2", "dialectStrength", "oath", "nemesis", "catchphrase", "taunts", "nicknames" }
+    "upbringing", "trait", "trait2", "dialectStrength", "oath", "nemesis", "catchphrase", "companion", "taunts", "nicknames" }
 -- Enemy Faction (My Voice): how mean taunts are (nil = Off), and race nicknames in your chat
 -- (nil = Off; ENEMY = the other faction's races, ALL = every race). Lines: situations/Taunts.lua
 Tune.TAUNT_LEVELS = { CIVIL = "Civil", ROUGH = "Rough", SAVAGE = "Savage" }
@@ -1064,13 +1070,37 @@ Tune.TAUNT_SHARE = 0.5     -- a target-change line at an enemy player that is a 
 Tune.TAUNT_BUTTON_GAP = 6  -- seconds between taunts from the button, keybind or /mono taunt
 -- Character Anchors (free text): longer than names
 local CV_MAX_ANCHOR = 80
-local CV_ANCHOR_FIELDS = { oath = true, nemesis = true, catchphrase = true }
+local CV_ANCHOR_FIELDS = { oath = true, nemesis = true, catchphrase = true, companion = true }
 -- Dialect Strength (My Voice): nil = Full (follows the General tab), LIGHT, CLEAN
 local CV_DIALECT_STRENGTHS = { LIGHT = true, CLEAN = true }
 local CV_MAX_NAME = 40
 
 local function CVNewTable()
-    return { oaths = {}, wordSwaps = {}, phraseSwaps = {}, battleCries = {}, raceStances = {}, extraLines = {} }
+    return { oaths = {}, wordSwaps = {}, phraseSwaps = {}, battleCries = {}, raceStances = {}, extraLines = {}, quirks = {} }
+end
+
+-- Quirks (Abilities tab): "when <trigger> matching <text> [only if <condition>], say one of
+-- these lines". Each: { trigger, match, cond, chance, lines }. Run by Monologue_Quirks.lua.
+--   trigger  ITEM (equip or loot an item), PLACE (enter a zone or subzone), TARGET (target a
+--            creature or player), CHAT (someone near you or in your group says a word)
+--   match    text matched in the item's name, type or quality / the place / the target's name,
+--            type, family, race or class / a whole word in the message ("" = anything; CHAT
+--            needs a word)
+--   cond     ALWAYS, COMBAT, PEACE, DUNGEON, RESTING, HAS:<profession>, NOT:<profession>,
+--            MOOD:<mood>
+--   chance   100, 60, 30 or 10 (percent)
+Tune.QUIRK_TRIGGERS = { ITEM = true, PLACE = true, TARGET = true, CHAT = true }
+Tune.QUIRK_CHANCES = { [100] = true, [60] = true, [30] = true, [10] = true }
+Tune.QUIRK_MAX = 20
+Tune.QUIRK_MAX_LINES = 12
+Tune.QUIRK_MAX_MATCH = 40
+
+function Engine:QuirkConditionValid(cond)
+    if cond == "ALWAYS" or cond == "COMBAT" or cond == "PEACE" or cond == "DUNGEON" or cond == "RESTING" then return true end
+    local kind, value = tostring(cond):match("^(%u+):(%a+)$")
+    if kind == "HAS" or kind == "NOT" then return self.Data.Professions[value] ~= nil end
+    if kind == "MOOD" then return type(Tune.MOODS) == "table" and Tune.MOODS[value] ~= nil end
+    return false
 end
 
 -- Cross-race stances, from friendliest to coldest (labels live in Monologue_UI.lua)
@@ -1104,6 +1134,23 @@ function Engine:GetCustomVoice()
         end
         cv.extraLines[poolKey] = #clean > 0 and clean or nil
     end
+    -- Quirks: known triggers, a short match text, a valid condition and chance, clean lines
+    local quirks = {}
+    for _, q in ipairs(type(cv.quirks) == "table" and cv.quirks or {}) do
+        if type(q) == "table" and Tune.QUIRK_TRIGGERS[q.trigger] and #quirks < Tune.QUIRK_MAX then
+            q.match = type(q.match) == "string" and CVCleanText(q.match, Tune.QUIRK_MAX_MATCH) or ""
+            if not Engine:QuirkConditionValid(q.cond) then q.cond = "ALWAYS" end
+            q.chance = Tune.QUIRK_CHANCES[tonumber(q.chance)] and tonumber(q.chance) or 60
+            local lines = {}
+            for _, line in ipairs(type(q.lines) == "table" and q.lines or {}) do
+                local text = type(line) == "string" and CVCleanText(line, CV_MAX_TEXT) or nil
+                if text and #lines < Tune.QUIRK_MAX_LINES then lines[#lines + 1] = text end
+            end
+            q.lines = lines
+            if #lines > 0 and not (q.trigger == "CHAT" and q.match == "") then quirks[#quirks + 1] = q end
+        end
+    end
+    cv.quirks = quirks
     -- Old openers and closers (before 0.1.3) become oaths: "By Magni's beard," and
     -- ", by Magni's beard!" both turn into "By Magni's beard!"
     for _, oldKey in ipairs({ "openers", "closers", "suffixes" }) do
@@ -1172,7 +1219,47 @@ function Engine:HasCustomVoice()
         or next(cv.raceStances or {}) ~= nil or #(cv.oaths or cv.openers or {}) > 0
         or #(cv.closers or {}) > 0 or #(cv.battleCries or {}) > 0
         or next(cv.wordSwaps or {}) ~= nil or next(cv.phraseSwaps or {}) ~= nil
-        or next(cv.extraLines or {}) ~= nil
+        or next(cv.extraLines or {}) ~= nil or #(cv.quirks or {}) > 0
+end
+
+-- Adds a line to the quirk with this trigger, match, condition and chance (made if new).
+-- Returns ok, message.
+function Engine:QuirkAddLine(trigger, match, cond, chance, text)
+    local cv = self:GetCustomVoice()
+    if not cv then return false end
+    if not Tune.QUIRK_TRIGGERS[trigger] then return false, "Pick what sets the quirk off first." end
+    match = CVCleanText(match or "", Tune.QUIRK_MAX_MATCH) or ""
+    if trigger == "CHAT" and match == "" then return false, "A chat quirk needs a word to listen for." end
+    if not self:QuirkConditionValid(cond) then cond = "ALWAYS" end
+    chance = Tune.QUIRK_CHANCES[tonumber(chance)] and tonumber(chance) or 60
+    local line = CVCleanText(text, CV_MAX_TEXT)
+    if not line then return false, "Type a line first." end
+    for _, q in ipairs(cv.quirks) do
+        if q.trigger == trigger and q.match:lower() == match:lower() and q.cond == cond and q.chance == chance then
+            for _, existing in ipairs(q.lines) do
+                if existing:lower() == line:lower() then return false, "That quirk already has that line." end
+            end
+            if #q.lines >= Tune.QUIRK_MAX_LINES then return false, "That quirk is full (" .. Tune.QUIRK_MAX_LINES .. " lines)." end
+            q.lines[#q.lines + 1] = line
+            return true
+        end
+    end
+    if #cv.quirks >= Tune.QUIRK_MAX then return false, "You have the most quirks allowed (" .. Tune.QUIRK_MAX .. ")." end
+    cv.quirks[#cv.quirks + 1] = { trigger = trigger, match = match, cond = cond, chance = chance, lines = { line } }
+    return true
+end
+
+-- Removes one line (lineIndex) or, without one, the whole quirk at index
+function Engine:QuirkRemove(index, lineIndex)
+    local cv = self:GetCustomVoice()
+    local q = cv and cv.quirks[index]
+    if not q then return false end
+    if lineIndex then
+        table.remove(q.lines, lineIndex)
+        if #q.lines > 0 then return true end
+    end
+    table.remove(cv.quirks, index)
+    return true
 end
 
 local function CVAppendList(base, extra)
@@ -1511,12 +1598,19 @@ function Engine:ExportCustomVoice()
             records[#records + 1] = "e:" .. CVEncode(poolKey) .. "=" .. CVEncode(line)
         end
     end
+    -- Q = one quirk line: trigger=match=condition=chance=line
+    for _, q in ipairs(cv.quirks or {}) do
+        for _, line in ipairs(q.lines) do
+            records[#records + 1] = "Q:" .. CVEncode(q.trigger) .. "=" .. CVEncode(q.match) .. "=" .. CVEncode(q.cond)
+                .. "=" .. tostring(q.chance) .. "=" .. CVEncode(line)
+        end
+    end
     -- Identity: l clan, n clan name, t hometown, a allegiance, f profession, u upbringing,
     -- x trait, d dialect strength
     for _, pair in ipairs({ { "l", "clan" }, { "n", "clanName" }, { "t", "hometown" }, { "a", "allegiance" },
         { "f", "profession" }, { "u", "upbringing" }, { "x", "trait" }, { "d", "dialectStrength" },
         { "y", "trait2" }, { "k", "oath" }, { "m", "nemesis" }, { "q", "catchphrase" },
-        { "j", "taunts" }, { "z", "nicknames" } }) do
+        { "j", "taunts" }, { "z", "nicknames" }, { "i", "companion" } }) do
         if cv[pair[2]] then records[#records + 1] = pair[1] .. ":" .. CVEncode(cv[pair[2]]) end
     end
     return CV_HEADER .. table.concat(records, ";")
@@ -1524,7 +1618,7 @@ end
 
 local CV_IDENTITY_TAGS = { l = "clan", n = "clanName", t = "hometown", a = "allegiance", f = "profession",
     u = "upbringing", x = "trait", d = "dialectStrength", y = "trait2", k = "oath", m = "nemesis", q = "catchphrase",
-    j = "taunts", z = "nicknames" }
+    j = "taunts", z = "nicknames", i = "companion" }
 
 -- Parses a share string into a fresh table; returns nil, reason when it is not valid
 local function CVParseString(str)
@@ -1545,7 +1639,21 @@ local function CVParseString(str)
         if record ~= "" then
             local tag, value = record:match("^(%a):(.*)$")
             if not tag then return nil, "Unreadable record in the string." end
-            if tag == "p" then
+            if tag == "Q" then
+                local trigger, match, cond, chance, line = value:match("^([^=]*)=([^=]*)=([^=]*)=([^=]*)=(.*)$")
+                if trigger then
+                    trigger, match, cond, line = CVDecode(trigger), CVDecode(match), CVDecode(cond), CVDecode(line)
+                    local into
+                    for _, q in ipairs(cv.quirks) do
+                        if q.trigger == trigger and q.match == match and q.cond == cond and tostring(q.chance) == chance then into = q end
+                    end
+                    if into then
+                        into.lines[#into.lines + 1] = line
+                    else
+                        cv.quirks[#cv.quirks + 1] = { trigger = trigger, match = match, cond = cond, chance = tonumber(chance), lines = { line } }
+                    end
+                end
+            elseif tag == "p" then
                 cv.persona = CVCleanText(CVDecode(value), CV_MAX_KEY)
             elseif tag == "r" then
                 cv.racePreset = CVCleanText(CVDecode(value), CV_MAX_KEY)
@@ -1788,6 +1896,7 @@ local LAYER_WEIGHTS = {
     class = 25,       -- the spell's or class pool passed in by the caller
     trait = 20,       -- defining traits (1-2)
     lineage = 20,     -- clan + upbringing
+    companion = 10,   -- your companion (My Voice), only when one is set
     allegiance = 15,  -- allegiance / order
     roots = 10,       -- hometown, professions, character anchors
     race = 10,        -- race pack (and temperament) pool
@@ -1861,6 +1970,18 @@ function Engine:PickLayeredPool(kind, classDeck, classPool, classLabel, raceDeck
         end
     end
     layer("roots", roots)
+
+    -- Your companion (My Voice: a pet or animal friend): its own layer, so it comes up now
+    -- and then. A profile's CompanionLines (Carl's macaw) win over the shared ones.
+    if cv.companion then
+        local own = type(self.ActiveProfile.CompanionLines) == "table" and self.ActiveProfile.CompanionLines[kind] or nil
+        local shared = type(anchors.Companion) == "table" and anchors.Companion[kind] or nil
+        if UsablePool(own) then
+            layer("companion", { { "Companion_Own_" .. kind, own, "your companion (profile)" } })
+        else
+            layer("companion", { { "Anchor_Companion_" .. kind, shared, "your companion" } })
+        end
+    end
 
     local raceSubs = { { raceDeck, racePool, "race" } }
     if kind == "Combat" and raceFile then
@@ -2649,9 +2770,9 @@ function Engine:BuildBugReport(note)
         str(db.fixTypos == true), str(db.abilityAuto ~= false), str(db.dungeonQuiet == true), str(db.outOfCharacter == true),
         str(self:GetMood() or "normal"), Count(char.SeenSpells), Count(char.AbilityMap), Count(char.AbilityEvery),
         Count(cv.extraLines)))
-    add(string.format("Chat: taunts=%s nicknames=%s translateKey=%s preview=%s tauntButton=%s",
+    add(string.format("Chat: taunts=%s nicknames=%s translateKey=%s preview=%s tauntButton=%s quirks=%d companion=%s",
         str(cv.taunts or "off"), str(cv.nicknames or "off"), str(db.translateKey or "ENTER"), str(db.chatPreview ~= false),
-        str(db.tauntButtonShown == true)))
+        str(db.tauntButtonShown == true), #(cv.quirks or {}), str(cv.companion ~= nil)))
     local press = db.pressVoice or {}
     local places, blocked = {}, {}
     for _, place in ipairs({ "world", "worldpvp", "dungeon", "raid", "battleground", "boss" }) do
@@ -7579,6 +7700,65 @@ do
         end
     end)
 end
+-- A new shield: equipped in the off-hand slot, or looted / handed over as a reward. Says
+-- something only when the profile (or race pack) has Moments.ShieldEquip lines, such as
+-- Carl the engineer, who can't put a spike on it. The pool may name a profession it needs
+-- (requiresProfession) and one it must not have (withoutProfession), checked against the
+-- My Voice profession or the ones detected. A loading screen just remembers the shield.
+Tune.MOMENTS.ShieldEquip = { chance = 0.6, cooldown = 300 }
+function Engine:IsShieldItem(item)
+    local getInfo = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not item or type(getInfo) ~= "function" then return false end
+    local ok, _, _, _, equipLoc = pcall(getInfo, item)
+    return ok and Clean(equipLoc) == "INVTYPE_SHIELD"
+end
+
+function Engine:ShieldQuirkPool()
+    local moments = self.ActiveProfile and self.ActiveProfile.Moments
+    local pool = type(moments) == "table" and moments.ShieldEquip or nil
+    if not UsablePool(pool) then return nil end
+    local have = {}
+    for _, key in ipairs(self:GetProfessionKeys()) do have[key] = true end
+    if pool.requiresProfession and not have[pool.requiresProfession] then return nil end
+    if pool.withoutProfession and have[pool.withoutProfession] then return nil end
+    return pool
+end
+
+function Engine:HandleShieldEvent(event, ...)
+    if event == "PLAYER_ENTERING_WORLD" then
+        self.State.ShieldID = Clean(GetInventoryItemID("player", 17))
+        return
+    end
+    local shield
+    if event == "PLAYER_EQUIPMENT_CHANGED" then
+        if (...) ~= 17 then return end
+        local id = Clean(GetInventoryItemID("player", 17))
+        if not id or id == self.State.ShieldID then return end
+        self.State.ShieldID = id
+        shield = self:IsShieldItem(id)
+    elseif event == "CHAT_MSG_LOOT" then
+        local message = Clean((...))
+        if type(message) ~= "string" then return end
+        local mine = false
+        for _, format in ipairs({ LOOT_ITEM_SELF, LOOT_ITEM_PUSHED_SELF, LOOT_ITEM_SELF_MULTIPLE, LOOT_ITEM_PUSHED_SELF_MULTIPLE }) do
+            local prefix = type(format) == "string" and format:match("^(.-)%%s") or nil
+            if prefix and prefix ~= "" and message:sub(1, #prefix) == prefix then mine = true; break end
+        end
+        local id = mine and tonumber(message:match("|Hitem:(%d+)")) or nil
+        shield = id and self:IsShieldItem(id)
+    end
+    if shield and self:ShieldQuirkPool() then self:SayMoment("ShieldEquip") end
+end
+do
+    local shieldFrame = CreateFrame("Frame")
+    SafeRegisterEvent(shieldFrame, "PLAYER_EQUIPMENT_CHANGED")
+    SafeRegisterEvent(shieldFrame, "CHAT_MSG_LOOT")
+    SafeRegisterEvent(shieldFrame, "PLAYER_ENTERING_WORLD")
+    shieldFrame:SetScript("OnEvent", function(_, event, ...)
+        if not MonologueDB or not MonologueCharDB then return end
+        pcall(Engine.HandleShieldEvent, Engine, event, ...)
+    end)
+end
 -- Falling has no event: checked a few times a second
 do
     local fallFrame = CreateFrame("Frame")
@@ -7641,6 +7821,12 @@ frame:SetScript("OnEvent", function(_, event, ...)
         if not MonologueCharDB.welcomed then
             C_Timer.After(6, function()
                 if MonologueUI and MonologueUI.ShowWelcome then MonologueUI:ShowWelcome() end
+            end)
+        elseif not MonologueDB.simpleIntroShown then
+            -- Players from before the simple menu: one card (per account) to try it and say
+            -- what they think. Brand-new players get the welcome card instead.
+            C_Timer.After(6, function()
+                if MonologueUI and MonologueUI.ShowSimpleIntro then MonologueUI:ShowSimpleIntro() end
             end)
         end
         -- BugGrabber users: also take its captures (it may own the error handler)
@@ -8057,7 +8243,9 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage("  /mono taunts <off|civil|rough|savage> - how mean you are to the other faction")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono nicknames <off|enemy|all> - race nicknames in your chat (orcs -> green skins)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono sendkey <enter|shift|ctrl> - translate typed chat on Enter, or only on Shift+Enter / Ctrl+Enter")
-    DEFAULT_CHAT_FRAME:AddMessage("  /mono abilities - open the Abilities tab (spell kinds, your own lines, pacing)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono abilities - open the Abilities tab (spell kinds, your own lines, quirks, pacing)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono quirks - list your quirks (when something happens, say one of your lines)")
+    DEFAULT_CHAT_FRAME:AddMessage("  /mono simple | full - open the simple one-page menu, or all the options")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono lines - open the Voice Lines tab (where and how often /s lines are said)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono voice - open the My Voice tab (custom oaths, swaps, battle cries, export/import)")
     DEFAULT_CHAT_FRAME:AddMessage("  /mono roster - open the Rivals & Friends roster window")
@@ -8380,6 +8568,25 @@ SlashCmdList["MONOLOGUE"] = function(msg)
         end
 
     elseif cmd == "abilities" then
+        if MonologueUI and MonologueUI.ShowTab then MonologueUI:ShowTab("abilities") end
+
+    elseif cmd == "simple" or cmd == "full" or cmd == "all" then
+        if MonologueUI then
+            if cmd == "simple" then MonologueUI:ShowSimple() else MonologueUI:ShowFull("settings") end
+        end
+
+    elseif cmd == "quirks" then
+        local cv = Engine:GetCustomVoice() or {}
+        local quirks = cv.quirks or {}
+        if #quirks == 0 then
+            Print("No quirks yet. Set them up on the Abilities tab (when something happens, say one of your lines).")
+        else
+            Print("Your quirks:")
+            for i, q in ipairs(quirks) do
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("  %d. %s '%s' (%s, %d%%): %d line%s", i, q.trigger,
+                    q.match ~= "" and q.match or "anything", q.cond, q.chance, #q.lines, #q.lines == 1 and "" or "s"))
+            end
+        end
         if MonologueUI and MonologueUI.ShowTab then MonologueUI:ShowTab("abilities") end
 
     elseif cmd == "taunts" or cmd == "nicknames" then

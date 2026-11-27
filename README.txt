@@ -1,4 +1,4 @@
-MONOLOGUE  -  version 0.1.5 (alpha)
+MONOLOGUE  -  version 0.1.5.1 (alpha)
 A roleplay voice addon for WoW Forever
 
 Your character talks on their own. They say a line when they pull with a big move (Charge,
@@ -28,6 +28,15 @@ UPDATING
 3. Download the newest Monologue_v.1.zip:
        https://github.com/GandalfTheGrey-k/Monologue/releases/latest
 4. Extract it into AddOns as in INSTALLING, start the game, and type /mono version.
+
+
+NEW IN 0.1.5.1
+--------------
+- A simple view: /mono opens one page with just the essentials. Show all options for the
+  full menu; Simple view on the General tab to come back. Same settings either way.
+- Quirks (Abilities tab): "when I equip a shield / enter Duskwood / target a spider /
+  someone says 'beard', say one of my lines", with optional conditions. /mono quirks.
+- Companion (My Voice): your pet's name; your character talks to it now and then.
 
 
 NEW IN 0.1.5
@@ -105,11 +114,12 @@ QUICK START
     Voice Lines  where and how often you speak (sliders), the Battle Cry, Greet and Taunt buttons,
                  everyday moments, the waiting-line bubble, NPC yells, party banter
     My Voice     your character: personality, clan, hometown, allegiance, upbringing,
-                 traits, oath / nemesis / catchphrase, mood, taunts and race nicknames,
+                 traits, oath / nemesis / catchphrase / companion, mood, taunts and race nicknames,
                  My Oaths, words never translated, your own lines and word swaps
     Abilities    what kind of move each spell is (Attack, Burst, Defend, Interrupt, Heal,
                  Silent; every Nth cast), quiet in dungeons, and your own lines for any
-                 spell or everyday moment
+                 spell or everyday moment, and quirks: "when I equip a shield / enter
+                 Duskwood / target a spider / someone says 'beard', say one of my lines"
 - Start a chat message with !! to send it exactly as typed (no accent).
 - Quick picks worth trying first (My Voice tab):
     Persona preset, Racial Temperament, Clan / Lineage, Hometown, Allegiance / Order,
@@ -121,7 +131,8 @@ QUICK START
 
 SLASH COMMANDS
 --------------
-  /mono              open the settings
+  /mono              open the settings (the simple view first; Show all options for the rest)
+  /mono simple | full   switch between the simple one-page menu and all options
   /mono bug          make a bug report to copy into Discord
   /mono safemode     Strict Safe-Mode on/off (see below)
   /mono help         every command
